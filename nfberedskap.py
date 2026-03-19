@@ -4,10 +4,10 @@ import requests
 import pandas as pd
 from datetime import datetime
 
-# --- 1. FUNKSJONER FOR EKSTERNE DATA (OPPDATERT TIL API01.NVE.NO) ---
+# --- 1. FUNKSJONER FOR EKSTERNE DATA (MET & NVE) ---
 def hent_vaer_melhus():
     url = "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=63.2859&lon=10.2781"
-    headers = {'User-Agent': 'NF_Melhus_Beredskap_App_v1.5'}
+    headers = {'User-Agent': 'NF_Melhus_Beredskap_App_v1.6'}
     try:
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
@@ -17,8 +17,18 @@ def hent_vaer_melhus():
     except: pass
     return "N/A", "N/A"
 
+def hent_skogbrannfare_melhus():
+    url = "https://api.met.no/weatherapi/firehazard/2.0/compact?lat=63.2859&lon=10.2781"
+    headers = {'User-Agent': 'NF_Melhus_Beredskap_App_v1.6'}
+    try:
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            return data['properties']['timeseries'][0]['fire_hazard_index']
+    except: pass
+    return None
+
 def hent_alle_varsom_data():
-    """Henter flomvarsel for hele Trøndelag fra nyeste API01"""
     url = "https://api01.nve.no/hydrology/forecast/flood/v1.0.0/api/CountyOverview/50"
     varsler = {}
     try:
@@ -28,13 +38,9 @@ def hent_alle_varsom_data():
             for k in data:
                 navn = k.get('MunicipalityName')
                 if navn in ["Melhus", "Skaun", "Midtre Gauldal"]:
-                    varsler[navn] = {
-                        "nivaa": k.get('ActivityLevel', 1),
-                        "tekst": k.get('MainText', 'Ingen aktive varsler.')
-                    }
+                    varsler[navn] = {"nivaa": k.get('ActivityLevel', 1), "tekst": k.get('MainText', 'Normalt')}
         return varsler
-    except:
-        return {}
+    except: return {}
 
 # --- 2. LAGRINGSSYSTEM ---
 def lagre_alt(data_dict):
@@ -55,9 +61,7 @@ def last_alt():
                 content = f.read()
                 if content:
                     for p in content.split(";"):
-                        if "|" in p:
-                            k, v = p.split("|")
-                            default[k] = v
+                        if "|" in p: k, v = p.split("|"); default[k] = v
         except: pass
     return default
 
@@ -70,6 +74,7 @@ st.set_page_config(page_title="NF Melhus Beredskap", layout="wide")
 d = last_alt()
 temp, vind = hent_vaer_melhus()
 varsom_data = hent_alle_varsom_data()
+brannfare = hent_skogbrannfare_melhus()
 
 st.markdown("<h1 style='text-align: center;'>🚑 Norsk Folkehjelp Melhus</h1>", unsafe_allow_html=True)
 st.write("---")
@@ -80,39 +85,46 @@ if "🟡" in d['nivaa']: farge = "#ffc107"
 elif "🔴" in d['nivaa']: farge = "#dc3545"
 
 st.markdown(f"""
-    <div style="background-color: {farge}; padding: 25px; border-radius: 15px; text-align: center; color: white;">
-        <h1 style="margin: 0;">{d['nivaa']}</h1>
-        <p style="font-size: 1.2rem;"><b>Lederens beskjed:</b> {d['beskjed']}</p>
+    <div style="background-color: {farge}; padding: 25px; border-radius: 15px; text-align: center; color: white; border: 2px solid rgba(0,0,0,0.1);">
+        <h1 style="margin: 0; font-size: 2.5rem;">{d['nivaa']}</h1>
+        <p style="font-size: 1.3rem; margin-top: 10px;"><b>Lederens beskjed:</b> {d['beskjed']}</p>
     </div>
 """, unsafe_allow_html=True)
 
-# --- 5. AUTOMATISK TILTAKSKORT ---
+# --- 5. TILTAKSKORT (HVIS AKTIVT) ---
 if d['valgt_kort'] != "Ingen":
     st.write("")
     st.error(f"📋 **AKTIVT TILTAKSKORT: {d['valgt_kort'].upper()}**")
-    with st.expander("Se tiltak", expanded=True):
-        if d['valgt_kort'] == "Ekom-bortfall":
-            st.write("**1.** Aktiver Nødnett-terminaler og sjekk dekning i isolerte soner.")
-            st.write("**2.** Etabler faste meldepunkter (fysisk oppmøte) ved grendehus.")
-            st.write("**3.** Vurder behov for satellittsamband mot KO.")
-        elif d['valgt_kort'] == "Jordras":
-            st.write("**1.** Etabler sikkerhetssone og observasjonspost.")
-            st.write("**2.** Start registrering av evakuerte i samarbeid med Politi.")
+    with st.expander("Se detaljerte instruksjoner", expanded=True):
+        if d['valgt_kort'] == "Jordras":
+            st.write("- **Sikkerhet:** Fare for sekundærras. Etabler sikkerhetssone.")
+            st.write("- **Varsling:** Bekreft varsling til Politi/HRS.")
+        elif d['valgt_kort'] == "Ekom-bortfall":
+            st.write("- **Samband:** Bruk Nødnett/Satellitt. Etabler fysiske meldepunkter.")
+        elif d['valgt_kort'] == "Skogbrann":
+            st.write("- **Vind:** Monitorer vindretning. **Vann:** Klargjør pumper.")
 
-# --- 6. VARSOM OVERSIKT (API01 DATA) ---
+# --- 6. VARSEL-OVERSIKT (NVE & MET) ---
 st.write("")
-with st.expander("📊 Status Naturfare (Melhus m/naboer)", expanded=False):
-    cols = st.columns(3)
-    kommuner = ["Melhus", "Midtre Gauldal", "Skaun"]
-    for i, kommune in enumerate(kommuner):
-        info = varsom_data.get(kommune, {"nivaa": 1, "tekst": "Data utilgjengelig"})
-        with cols[i]:
-            if info['nivaa'] > 1:
-                st.warning(f"**{kommune}:** Nivå {info['nivaa']}\n\n{info['tekst']}")
-            else:
-                st.success(f"**{kommune}:** Normalt")
+col_v1, col_v2 = st.columns([2, 1])
 
-# --- 7. DASHBORD ---
+with col_v1:
+    with st.expander("📊 Naturfare Melhus m/naboer", expanded=False):
+        cv = st.columns(3)
+        for i, kommune in enumerate(["Melhus", "Midtre Gauldal", "Skaun"]):
+            info = varsom_data.get(kommune, {"nivaa": 1, "tekst": "Data utilgjengelig"})
+            with cv[i]:
+                if info['nivaa'] > 1: st.warning(f"**{kommune} (NVE):** Nivå {info['nivaa']}")
+                else: st.success(f"**{kommune}:** Normalt")
+
+with col_v2:
+    if brannfare is not None:
+        if brannfare > 3.0: st.error(f"🔥 **Skogbrannfare:** Høy ({brannfare})")
+        elif brannfare > 1.0: st.warning(f"🔥 **Skogbrannfare:** Moderat ({brannfare})")
+        else: st.success(f"🔥 **Skogbrannfare:** Lav")
+    else: st.info("🔥 Skogbrann varsel utilgjengelig")
+
+# --- 7. DASHBORD: INFO OG KONTAKT ---
 st.write("---")
 c1, c2, c3 = st.columns(3)
 with c1:
@@ -120,35 +132,42 @@ with c1:
     st.metric("Temp", f"{temp} °C"); st.metric("Vind", f"{vind} m/s")
 with c2:
     st.subheader("📞 Kontakt")
-    st.write(f"**Vakt:** {d['vakt']}\n\n**Leder:** {d['leder']}")
+    st.write(f"**Vakt:** {d['vakt']}\n\n**Leder:** {d['leder']}\n\n**Sanitet:** {d['sanitet']}")
 with c3:
-    st.subheader("📻 Siste")
-    st.info(f"**TG:** `{d['talegruppe']}`\n**Oppmøte:** {d['oppmote']}")
+    st.subheader("📻 Operativt")
+    st.info(f"**TG:** `{d['talegruppe']}`\n**Leder:** {d['operativ_leder']}\n**Sted:** {d['oppmote']}")
 
-# --- 8. REGISTRERING ---
+# --- 8. REGISTRERING AV DELTAKELSE ---
 st.write("---")
-st.header("📝 Registrer deltakelse")
+st.header("📝 Registrer din deltakelse")
 oppdrags_liste = d.get('aktive_oppdrag', 'Trening,Vakt,Annet').split(',')
-with st.expander("Åpne skjema"):
+with st.expander("Åpne registreringsskjema"):
     with st.form("aksjon_form", clear_on_submit=True):
-        navn = st.text_input("Navn")
+        navn = st.text_input("Ditt navn")
         oppdrag = st.selectbox("Oppdrag", oppdrags_liste)
-        c1, c2 = st.columns(2)
-        t_u = c1.text_input("Ut (HH:MM)"); t_i = c2.text_input("Inn (HH:MM)")
+        c_t1, c_t2 = st.columns(2)
+        t_u = c_t1.text_input("Ut (HH:MM)"); t_i = c_t2.text_input("Inn (HH:MM)")
         km = st.number_input("KM", min_value=0); ut = st.number_input("Utlegg", min_value=0)
-        if st.form_submit_button("SEND INN"):
+        if st.form_submit_button("SEND INN REGISTRERING"):
             lagre_utrykning({"Dato": datetime.now().strftime("%d.%m.%Y"), "Navn": navn, "Oppdrag": oppdrag, "Ut": t_u, "Inn": t_i, "KM": km, "Utlegg": ut})
-            st.success("Lagret!")
+            st.success("Takk! Registrert.")
 
-# --- 9. ADMIN ---
+# --- 9. ADMIN (KOMPLETT) ---
 st.write("---")
-with st.expander("🔐 Admin"):
+with st.expander("🔐 Administrasjon (Kun Leder)"):
     pw = st.text_input("Passord", type="password")
     if pw == "melhus123":
+        if st.button("VIS LOGG (Excel)"):
+            if os.path.exists("aksjonslogg.csv"): 
+                df_logg = pd.read_csv("aksjonslogg.csv")
+                st.dataframe(df_logg)
+                st.download_button("Last ned CSV", df_logg.to_csv(index=False), "logg.csv")
+        
+        st.write("---")
         ca, cb = st.columns(2)
         with ca:
             n_nivaa = st.selectbox("Status:", ["🟢 Grønn / Normal", "🟡 Gul / Forhøyhet", "🔴 Rød / Høy"], index=0)
-            n_kort = st.selectbox("Tiltakskort:", ["Ingen", "Jordras", "Ekom-bortfall", "Strømbrudd"], index=0)
+            n_kort = st.selectbox("Tiltakskort:", ["Ingen", "Jordras", "Ekom-bortfall", "Strømbrudd", "Skogbrann"], index=0)
             n_beskjed = st.text_area("Beskjed", value=d['beskjed'])
             n_oppdrag = st.text_input("Aktive oppdrag (separer med komma)", value=d.get('aktive_oppdrag', 'Trening,Vakt'))
         with cb:
@@ -159,9 +178,10 @@ with st.expander("🔐 Admin"):
             n_sted = st.text_input("Oppmøte", value=d['oppmote'])
             n_sanitet = st.text_input("Sanitetsleder", value=d['sanitet'])
 
-        if st.button("OPPDATER"):
+        if st.button("LAGRE ALLE ENDRINGER"):
             d.update({"nivaa": n_nivaa, "beskjed": n_beskjed, "vakt": n_vakt, "leder": n_leder, 
                       "sanitet": n_sanitet, "talegruppe": n_tg, "operativ_leder": n_op, 
                       "oppmote": n_sted, "valgt_kort": n_kort, "aktive_oppdrag": n_oppdrag})
             lagre_alt(d)
+            st.success("Oppdatert!")
             st.rerun()
