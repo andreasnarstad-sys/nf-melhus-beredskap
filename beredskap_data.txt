@@ -1,0 +1,1 @@
+nivaa|🟢 Grønn / Normal;beskjed|Alt ok.;vakt|9XX XX XXX;leder|Ikke satt;sanitet|Ikke satt;talegruppe|FOR-MELHUS-1;operativ_leder|Ikke satt;oppmote|Depot Melhus;valgt_kort|Ingen;aktive_oppdrag|Trening,Vakt,Annet
