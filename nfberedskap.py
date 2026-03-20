@@ -1,166 +1,197 @@
 import streamlit as st
-import os
 import requests
 import pandas as pd
+import os
 import base64
 from datetime import datetime
+import streamlit.components.v1 as components
 
-# --- 1. KONFIGURASJON: MAPPING AV DISTRIKT (NVE & MET) ---
-DISTRIKT_MAP = {
-    "Troms": {"fylker": [54, 55], "met_navn": "Troms", "skred": ["Lyngen", "Tromsø", "Indre Troms", "Sør-Troms", "Nord-Troms", "Senja"]},
-    "Finnmark": {"fylker": [54, 56], "met_navn": "Finnmark", "skred": ["Vest-Finnmark", "Nord-Finnmark", "Øst-Finnmark"]},
-    "Nordland": {"fylker": [18], "met_navn": "Nordland", "skred": ["Ofoten", "Salten", "Svartisen", "Helgeland", "Lofoten", "Vesterålen"]},
-    "Trøndelag": {"fylker": [50], "met_navn": "Trøndelag", "skred": ["Trollheimen"]},
-    "Møre og Romsdal": {"fylker": [15], "met_navn": "Møre og Romsdal", "skred": ["Sunnmøre", "Romsdal"]},
-    "Vest": {"fylker": [46], "met_navn": "Vestland", "skred": ["Hardanger", "Voss", "Indre Sogn", "Indre Fjordane"]},
-    "Sør-Vest": {"fylker": [11, 42], "met_navn": "Rogaland", "skred": ["Heiane"]},
-    "Agder": {"fylker": [42], "met_navn": "Agder", "skred": []},
-    "Sør-Øst": {"fylker": [38, 33], "met_navn": "Vestfold og Telemark", "skred": ["Telemark"]},
-    "Innlandet": {"fylker": [34], "met_navn": "Innlandet", "skred": ["Jotunheimen", "Rondane"]},
-    "Øst": {"fylker": [3, 34], "met_navn": "Viken", "skred": []},
-    "Oslo": {"fylker": [3], "met_navn": "Oslo", "skred": []}
-}
+# --- 1. DATAKILDER (MET & NVE) ---
 
-# --- 2. DATA-HENTING (NVE & MET) ---
-def hent_alle_varsler(distrikt_navn):
-    config = DISTRIKT_MAP.get(distrikt_navn, {"fylker": [50], "met_navn": "Trøndelag", "skred": []})
-    funnede = []
-
-    # A) NVE: Flom og Jordskred (api01)
-    for f_nr in config["fylker"]:
-        url = f"https://api01.nve.no/hydrology/forecast/flood/v1.0.0/api/CountyOverview/{f_nr}"
-        try:
-            r = requests.get(url, timeout=5)
-            if r.status_code == 200:
-                for v in r.json():
-                    nivaa = v.get('ActivityLevel', 1)
-                    if nivaa > 1:
-                        funnede.append({"Område": v['MunicipalityName'], "Nivå": nivaa, "Type": "Flom/Skred", "Info": v.get('MainText', '')})
-        except: pass
-
-    # B) NVE: Snøskred (api01 - Regionvis)
-    for reg in config["skred"]:
-        url = f"https://api01.nve.no/hydrology/forecast/avalanche/v1.0.0/api/AvalancheWarningByRegion/Detail/{reg}/1"
-        try:
-            r = requests.get(url, timeout=5)
-            if r.status_code == 200:
-                data = r.json()
-                if data:
-                    nivaa = int(data[0].get('DangerLevel', 1))
-                    if nivaa > 1:
-                        funnede.append({"Område": f"REGION: {reg}", "Nivå": nivaa, "Type": "SNØSKRED", "Info": data[0].get('MainText', '')})
-        except: pass
-
-    # C) MET: Meteorologiske farevarsler (Vind, Is, Snø, Lyn)
-    met_url = "https://api.met.no/weatherapi/metalerts/1.1/.json"
-    headers = {'User-Agent': 'NF_Beredskap_App_v3.0'}
+def hent_vaer_data():
+    """Henter nåvær og 6-timers prognose for Melhus"""
+    url = "https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=63.28&lon=10.28"
+    headers = {'User-Agent': 'NF-Beredskap-Melhus-v14'}
     try:
-        r = requests.get(met_url, headers=headers, timeout=5)
+        r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
-            alerts = r.json().get('features', [])
-            for alert in alerts:
-                props = alert.get('properties', {})
-                if config["met_navn"].lower() in props.get('area', '').lower():
-                    risk_map = {"Moderate": 2, "Severe": 3, "Extreme": 4}
-                    nivaa = risk_map.get(props.get('riskLevel'), 2)
-                    funnede.append({
-                        "Område": props.get('area', 'Lokalt'),
-                        "Nivå": nivaa,
-                        "Type": f"MET: {props.get('event', 'Vær')}".upper(),
-                        "Info": props.get('description', '')
-                    })
+            data = r.json()
+            timeseries = data['properties']['timeseries']
+            curr = timeseries[0]['data']['instant']['details']
+            prog = []
+            for i in range(1, 7):
+                ts = timeseries[i]
+                tid = datetime.fromisoformat(ts['time'].replace('Z', '+00:00')).strftime('%H:00')
+                t = ts['data']['instant']['details'].get('air_temperature')
+                v = ts['data']['instant']['details'].get('wind_speed')
+                prog.append({"Tid": tid, "Temp": f"{t}°C", "Vind": f"{v} m/s"})
+            return curr.get('air_temperature'), curr.get('wind_speed'), prog
+    except:
+        return None, None, []
+
+def hent_lokale_varsler():
+    funnede = []
+    headers = {'User-Agent': 'NF-Beredskap-Melhus-v14'}
+    
+    # A) SNØSKRED
+    skred_url = "https://api01.nve.no/hydrology/forecast/avalanche/v1.0.0/api/AvalancheWarningByRegion/Detail/All/1"
+    try:
+        r = requests.get(skred_url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            relevante = ["Trollheimen", "Heiane", "Oppdal", "Romsdal"] 
+            for v in r.json():
+                if v.get('RegionName') in relevante and int(v.get('DangerLevel', 1)) >= 2:
+                    funnede.append({"Område": v.get('RegionName'), "Nivå": int(v.get('DangerLevel')), "Type": "SNØSKRED", "Info": v.get('MainText', '')})
     except: pass
+
+    # B) FLOM & JORDSKRED
+    flom_url = "https://api01.nve.no/hydrology/forecast/flood/v1.0.0/api/CountyOverview/50"
+    try:
+        r_f = requests.get(flom_url, headers=headers, timeout=10)
+        if r_f.status_code == 200:
+            kommuner = ["Melhus", "Orkland", "Skaun", "Midtre Gauldal", "Trondheim"]
+            for f in r_f.json():
+                if f.get('MunicipalityName') in kommuner and int(f.get('ActivityLevel', 1)) >= 2:
+                    funnede.append({"Område": f.get('MunicipalityName'), "Nivå": int(f.get('ActivityLevel')), "Type": "FLOM/SKRED", "Info": f.get('MainText', '')})
+    except: pass
+
     return funnede
 
-# --- 3. HJELPEFUNKSJONER ---
-def hent_logo_base64():
-    for ext in ["png", "jpg", "jpeg"]:
-        if os.path.exists(f"nf_logo.{ext}"):
-            with open(f"nf_logo.{ext}", "rb") as f:
-                return base64.b64encode(f.read()).decode(), ext
-    return None, None
+# --- 2. AVANSERT LOKAL LAGRING ---
+DATA_FIL = "beredskap_status_v14.txt"
 
-def last_data():
-    d = {"nivaa": "🟢 Normal", "beskjed": "Alt ok.", "distrikt": "Troms", "vakt": "9XX XX XXX", "leder": "Ikke satt", "oppmote": "Depot", "kort": "Ingen"}
-    if os.path.exists("beredskap_data.txt"):
+def lagre_alt(data_dict):
+    # Lagrer alle feltene som en semikolon-separert streng
+    content = ";".join([f"{k}|{v}" for k, v in data_dict.items()])
+    with open(DATA_FIL, "w", encoding="utf-8") as f:
+        f.write(content)
+
+def last_alt():
+    d = {
+        "status": "🟢 Normal Beredskap",
+        "beskjed": "Alt ok i Melhus og Orkland.",
+        "leder": "Ikke satt",
+        "vakt": "9XX XX XXX",
+        "kort": "Ingen"
+    }
+    if os.path.exists(DATA_FIL):
         try:
-            with open("beredskap_data.txt", "r", encoding="utf-8") as f:
-                for p in f.read().split(";"):
-                    if "|" in p: k, v = p.split("|"); d[k] = v
+            with open(DATA_FIL, "r", encoding="utf-8") as f:
+                parts = f.read().split(";")
+                for p in parts:
+                    k, v = p.split("|")
+                    d[k] = v
         except: pass
     return d
 
-def lagre_data(d):
-    with open("beredskap_data.txt", "w", encoding="utf-8") as f:
-        f.write(";".join([f"{k}|{v}" for k, v in d.items()]))
+# --- 3. UI OPPSETT ---
+st.set_page_config(page_title="NF Operativ Tavle", layout="wide")
+d = last_alt()
 
-# --- 4. HOVEDAPP ---
-st.set_page_config(page_title="NF Beredskap v3.0", layout="wide")
-d = last_data()
-logo_b64, logo_ext = hent_logo_base64()
-
-if logo_b64:
-    st.markdown(f'<div style="text-align:center; margin-top:-30px;"><img src="data:image/{logo_ext};base64,{logo_b64}" style="width:100%; max-width:1000px;"></div>', unsafe_allow_html=True)
-else:
-    st.title("🚑 Norsk Folkehjelp Beredskap")
+# Logo
+if os.path.exists("nf_logo.png"):
+    with open("nf_logo.png", "rb") as f:
+        img = base64.b64encode(f.read()).decode()
+    st.markdown(f'<div style="text-align:center;"><img src="data:image/png;base64,{img}" style="width:100%; max-width:400px;"></div>', unsafe_allow_html=True)
 
 st.write("---")
 
-# Hovedstatus-banner
-f_banner = "#28a745"
-if "🟡" in d['nivaa']: f_banner = "#ffc107"
-elif "🔴" in d['nivaa']: f_banner = "#dc3545"
-st.markdown(f'<div style="background-color:{f_banner}; padding:20px; border-radius:15px; text-align:center; color:white; border: 2px solid rgba(0,0,0,0.1);"><h1>{d["nivaa"]}</h1><p style="font-size:1.2rem;">{d["beskjed"]}</p></div>', unsafe_allow_html=True)
+# HOVEDBANNER: STATUS
+f_bg = "#28a745"
+if "🟡" in d['status']: f_bg = "#ffc107"
+elif "🔴" in d['status']: f_bg = "#dc3545"
 
-# --- 5. VISNING AV FAREBILDE (NVE + MET) ---
+st.markdown(f"""
+    <div style="background-color:{f_bg}; padding:30px; border-radius:15px; text-align:center; color:white; border:2px solid rgba(0,0,0,0.2);">
+        <h1 style="margin:0; font-size:3.5rem; font-weight:bold;">{d['status']}</h1>
+        <p style="font-size:1.6rem; margin-top:15px;">{d['beskjed']}</p>
+    </div>
+""", unsafe_allow_html=True)
+
 st.write("")
-st.subheader(f"⚠️ Situasjonsbilde: {d['distrikt']} Politidistrikt")
 
-alle_varsler = hent_alle_varsler(d['distrikt'])
+# RAD 2: VÆR OG OPERATIV INFO
+c_vaer, c_info, c_kort = st.columns([1.5, 1, 1])
 
-if alle_varsler:
-    df = pd.DataFrame(alle_varsler).sort_values(by="Nivå", ascending=False)
-    
-    def style_fare(row):
-        colors = {2: ("#FFFF00", "#000000"), 3: ("#FF9900", "#FFFFFF"), 4: ("#FF0000", "#FFFFFF"), 5: ("#000000", "#FFFFFF")}
-        bg, txt = colors.get(row.Nivå, ("#28a745", "#ffffff"))
-        return [f'background-color: {bg}; color: {txt}; font-weight: bold'] * len(row)
+with c_vaer:
+    temp, vind, prog = hent_vaer_data()
+    if temp is not None:
+        st.markdown(f"""
+            <div style="background-color:#f8f9fa; padding:15px; border-radius:15px; border:1px solid #ddd; min-height:180px;">
+                <h4 style="margin:0; text-align:center; color:#333;">Været i Melhus</h4>
+                <h2 style="text-align:center; color:#1f77b4; margin:10px 0;">{temp}°C | {vind} m/s</h2>
+                <div style="display: flex; justify-content: space-between; font-size:0.75rem; text-align:center;">
+                    {"".join([f"<div>{p['Tid']}<br><b>{p['Temp']}</b><br>{p['Vind']}</div>" for p in prog[:4]])}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
 
-    st.dataframe(df.style.apply(style_fare, axis=1), use_container_width=True, hide_index=True)
-else:
-    st.success(f"✅ Ingen aktive farevarsler fra NVE eller MET i {d['distrikt']} akkurat nå.")
+with c_info:
+    st.markdown(f"""
+        <div style="background-color:#ffffff; padding:15px; border-radius:15px; border:2px solid #2e5984; min-height:180px;">
+            <h4 style="margin:0; color:#2e5984;">📞 Operativ Ledelse</h4>
+            <p style="margin:10px 0 5px 0;"><b>Leder:</b> {d['leder']}</p>
+            <p style="margin:0;"><b>Vakt-tlf:</b> {d['vakt']}</p>
+            <p style="font-size:0.8rem; color:gray; margin-top:20px;">Oppdatert: {datetime.now().strftime('%H:%M:%S')}</p>
+        </div>
+    """, unsafe_allow_html=True)
 
-# --- 6. OPERATIV DASHBORD ---
+with c_kort:
+    kort_farge = "#f8f9fa" if d['kort'] == "Ingen" else "#fff3cd"
+    kort_border = "#ddd" if d['kort'] == "Ingen" else "#ffeeba"
+    st.markdown(f"""
+        <div style="background-color:{kort_farge}; padding:15px; border-radius:15px; border:2px solid {kort_border}; min-height:180px;">
+            <h4 style="margin:0; color:#856404;">📋 Aktivt Tiltakskort</h4>
+            <h2 style="margin:15px 0; color:#856404;">{d['kort']}</h2>
+        </div>
+    """, unsafe_allow_html=True)
+
+# RAD 3: WINDY OG FAREVARSLER
 st.write("---")
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.write(f"**📞 Vakttelefon:** {d['vakt']}")
-    st.write(f"**👤 Beredskapsleder:** {d['leder']}")
-with c2:
-    st.info(f"**📍 Oppmøtested:**\n{d['oppmote']}")
-with c3:
-    if d['kort'] != "Ingen":
-        st.error(f"📋 **AKTIVT TILTAKSKORT:**\n{d['kort']}")
+col_map, col_alerts = st.columns([2, 1])
+
+with col_map:
+    st.subheader("💨 Live Vindkart (Melhus/Orkland)")
+    windy_url = "https://embed.windy.com/embed2.html?lat=63.260&lon=10.100&zoom=9&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=m%2Fs&metricTemp=%C2%B0C&radarRange=false"
+    components.iframe(windy_url, height=500)
+
+with col_alerts:
+    st.subheader("🚨 Aktive Farevarsler")
+    varsler = hent_lokale_varsler()
+    if varsler:
+        df = pd.DataFrame(varsler).sort_values(by="Nivå", ascending=False)
+        def style_f(row):
+            colors = {2: ("#FFFF00", "black"), 3: ("#FF9900", "white"), 4: ("#FF0000", "white")}
+            bg, txt = colors.get(row.Nivå, ("white", "black"))
+            return [f'background-color: {bg}; color: {txt}; font-weight: bold'] * len(row)
+        st.dataframe(df.style.apply(style_f, axis=1), use_container_width=True, hide_index=True)
     else:
-        st.write("✅ Ingen aktive tiltakskort.")
+        st.success("✅ Ingen farevarsler over nivå 1.")
+    
+    if st.button("🔄 Oppdater nå"):
+        st.rerun()
 
-# --- 7. ADMIN ---
+# --- 4. ADMIN-PANEL (OPERATIV KONTROLL) ---
 st.write("---")
-with st.expander("🔐 Administrasjon"):
-    pw = st.text_input("Passord", type="password")
-    if pw == "melhus123":
-        c1, c2 = st.columns(2)
-        with c1:
-            n_dist = st.selectbox("Politidistrikt:", list(DISTRIKT_MAP.keys()), index=list(DISTRIKT_MAP.keys()).index(d['distrikt']))
-            n_niv = st.selectbox("Beredskapsstatus:", ["🟢 Normal", "🟡 Forhøyhet", "🔴 Rød / Aksjon"])
-            n_besk = st.text_area("Beskjed til mannskap", value=d['beskjed'])
-        with c2:
-            n_vak = st.text_input("Vakttelefon", value=d['vakt'])
-            n_led = st.text_input("Leder", value=d['leder'])
-            n_opp = st.text_input("Oppmøtested", value=d['oppmote'])
-            n_kor = st.selectbox("Tiltakskort:", ["Ingen", "Snøskred", "Jordras", "Ekom-bortfall", "Isolasjon", "Ekstremvær"])
-
-        if st.button("OPPDATER TAVLE"):
-            d.update({"distrikt": n_dist, "nivaa": n_niv, "beskjed": n_besk, "vakt": n_vak, "leder": n_led, "oppmote": n_opp, "kort": n_kor})
-            lagre_data(d)
-            st.rerun()
+with st.expander("🔐 Administrasjon (Oppdater situasjonsbilde)"):
+    c1, c2 = st.columns(2)
+    with c1:
+        n_stat = st.selectbox("Status:", ["🟢 Normal Beredskap", "🟡 Forhøyhet Beredskap", "🔴 Rød / Aksjon"], 
+                             index=["🟢 Normal Beredskap", "🟡 Forhøyhet Beredskap", "🔴 Rød / Aksjon"].index(d['status']))
+        n_besk = st.text_area("Beskjed til mannskap:", value=d['beskjed'])
+        n_kort = st.selectbox("Tiltakskort i bruk:", ["Ingen", "Snøskred", "Flom", "Jordras", "Ekom-bortfall", "Isolasjon", "Søk/Redning"],
+                             index=["Ingen", "Snøskred", "Flom", "Jordras", "Ekom-bortfall", "Isolasjon", "Søk/Redning"].index(d['kort']))
+    with c2:
+        n_led = st.text_input("Operativ leder (Navn):", value=d['leder'])
+        n_vak = st.text_input("Vakttelefon (Nummer):", value=d['vakt'])
+        
+    if st.button("💾 Lagre og Oppdater Tavle"):
+        ny_data = {
+            "status": n_stat,
+            "beskjed": n_besk,
+            "leder": n_led,
+            "vakt": n_vak,
+            "kort": n_kort
+        }
+        lagre_alt(ny_data)
+        st.rerun()
