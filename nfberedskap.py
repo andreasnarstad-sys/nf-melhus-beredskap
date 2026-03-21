@@ -3,6 +3,9 @@ import requests
 import pandas as pd
 import os
 import json
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 import streamlit.components.v1 as components
 
@@ -54,7 +57,17 @@ GAMLE_FILER = ["beredskap_melhus_v27.txt", "beredskap_data_v19.txt", "beredskap_
 DELTAKELSE_FIL = "deltakelse_data.json"
 AVVIK_FIL = "avvik_data.json"
 VAKTPLAN_FIL = "vaktplan_data.json"
+EPOST_CONFIG_FIL = "epost_config.json"
 VEDLEGG_MAPPE = "vedlegg"
+
+EPOST_DEFAULTS = {
+    "smtp_server": "",
+    "smtp_port": "587",
+    "smtp_bruker": "",
+    "smtp_passord": "",
+    "fra": "",
+    "til": "andreas.narstad@gmail.com"
+}
 
 VAKTPLAN_DEFAULTS = {
     "sted": "",
@@ -97,6 +110,61 @@ def last_liste(fil):
 def lagre_liste(fil, data):
     with open(fil, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+
+def last_epost_config():
+    if os.path.exists(EPOST_CONFIG_FIL):
+        try:
+            with open(EPOST_CONFIG_FIL, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            result = dict(EPOST_DEFAULTS)
+            result.update({k: v for k, v in data.items() if k in EPOST_DEFAULTS})
+            return result
+        except Exception:
+            pass
+    return dict(EPOST_DEFAULTS)
+
+def lagre_epost_config(cfg):
+    with open(EPOST_CONFIG_FIL, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+def send_avvik_epost(avvik, cfg):
+    if not cfg.get("smtp_server") or not cfg.get("til") or not cfg.get("fra"):
+        return False, "E-postkonfigurasjon er ikke fullstendig (SMTP-server, fra og til er påkrevd)."
+    try:
+        haster = avvik.get("umiddelbar_oppfolging", False)
+        emne = f"{'⚡ AKUTT – ' if haster else ''}Avvik registrert – NF Melhus/Orkland"
+        kropp = f"""Nytt avvik er registrert i NF Operativ Tavle.
+
+Tidspunkt : {avvik['registrert']}
+Navn      : {avvik['navn']}
+E-post    : {avvik.get('epost') or '–'}
+Haster    : {'⚡ JA – krever umiddelbar oppfølging' if haster else 'Nei'}
+
+HENDELSE:
+{avvik['hendelse']}
+
+KONSEKVENS:
+{avvik.get('konsekvens') or '–'}
+
+---
+NF Operativ Tavle – Melhus & Orkland
+"""
+        msg = MIMEMultipart()
+        msg['From'] = cfg['fra']
+        msg['To'] = cfg['til']
+        msg['Subject'] = emne
+        msg.attach(MIMEText(kropp, 'plain', 'utf-8'))
+
+        with smtplib.SMTP(cfg['smtp_server'], int(cfg.get('smtp_port', 587)), timeout=10) as srv:
+            srv.ehlo()
+            srv.starttls()
+            srv.ehlo()
+            if cfg.get('smtp_bruker') and cfg.get('smtp_passord'):
+                srv.login(cfg['smtp_bruker'], cfg['smtp_passord'])
+            srv.send_message(msg)
+        return True, f"E-post sendt til {cfg['til']}"
+    except Exception as e:
+        return False, f"E-postfeil: {e}"
 
 def last_vaktplan():
     if os.path.exists(VAKTPLAN_FIL):
@@ -404,6 +472,77 @@ def hent_lokal_vaer():
     except Exception:
         return None, None, []
 
+def generer_tilbud_html(kunde, arrangement, dato_str, linjer, total, forbruk):
+    rader = ""
+    for navn, beregning, belop in linjer:
+        if belop == 0:
+            continue
+        rader += f"""
+        <tr>
+          <td>{navn}</td>
+          <td style='color:#555; font-size:0.85rem;'>{beregning}</td>
+          <td style='text-align:right; font-weight:bold;'>{belop:,.0f} kr</td>
+        </tr>""".replace(",", " ")
+    if forbruk:
+        rader += f"""
+        <tr>
+          <td>Forbruksmateriell</td>
+          <td style='color:#555; font-size:0.85rem;'>Manuelt oppgitt</td>
+          <td style='text-align:right; font-weight:bold;'>{forbruk:,.0f} kr</td>
+        </tr>""".replace(",", " ")
+    dato_generert = datetime.now().strftime("%d.%m.%Y")
+    return f"""<!DOCTYPE html>
+<html lang="no"><head><meta charset="UTF-8">
+<title>Tilbud – {arrangement}</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: Arial, sans-serif; color: #222; padding: 40px; max-width: 750px; margin: 0 auto; }}
+  .header {{ background: #cc0000; color: white; padding: 28px 32px; border-radius: 10px; margin-bottom: 28px; }}
+  .header h1 {{ font-size: 1.6rem; margin-bottom: 6px; }}
+  .header p {{ opacity: 0.88; font-size: 0.95rem; }}
+  .meta {{ display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }}
+  .meta div {{ background: #f5f5f5; border-radius: 8px; padding: 14px 18px; }}
+  .meta .label {{ font-size: 0.75rem; text-transform: uppercase; color: #888; margin-bottom: 4px; }}
+  .meta .val {{ font-weight: bold; font-size: 1rem; }}
+  table {{ width: 100%; border-collapse: collapse; margin-bottom: 20px; }}
+  th {{ background: #222; color: white; padding: 10px 14px; text-align: left; font-size: 0.85rem; }}
+  th:last-child {{ text-align: right; }}
+  td {{ padding: 10px 14px; border-bottom: 1px solid #eee; }}
+  tr:hover td {{ background: #fafafa; }}
+  .total-row td {{ border-top: 3px solid #cc0000; font-size: 1.15rem; font-weight: bold; background: #fff8f8; }}
+  .total-row td:last-child {{ color: #cc0000; font-size: 1.3rem; text-align: right; }}
+  .footer {{ color: #aaa; font-size: 0.8rem; text-align: center; margin-top: 28px; border-top: 1px solid #eee; padding-top: 14px; }}
+  @media print {{ body {{ padding: 20px; }} }}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>🚑 Tilbud – Sanitetsvakt</h1>
+  <p>Norsk Folkehjelp Melhus &amp; Orkland &nbsp;·&nbsp; Utstedt: {dato_generert}</p>
+</div>
+<div class="meta">
+  <div><div class="label">Kunde / Arrangør</div><div class="val">{kunde or '–'}</div></div>
+  <div><div class="label">Arrangement</div><div class="val">{arrangement or '–'}</div></div>
+  <div><div class="label">Dato for vakt</div><div class="val">{dato_str or '–'}</div></div>
+</div>
+<table>
+  <thead><tr><th>Beskrivelse</th><th>Beregning</th><th style='text-align:right;'>Beløp</th></tr></thead>
+  <tbody>
+    {rader}
+    <tr class="total-row">
+      <td colspan="2">TOTALT</td>
+      <td>{total:,.0f} kr</td>
+    </tr>
+  </tbody>
+</table>
+<div class="footer">
+  Norsk Folkehjelp – Melhus &amp; Orkland &nbsp;|&nbsp;
+  Tilbud generert {dato_generert} via NF Operativ Tavle<br>
+  Priser er veiledende og ekskl. mva. der annet ikke er avtalt.
+</div>
+</body></html>""".replace(",", " ")
+
+
 # --- UI ---
 
 st.set_page_config(page_title="NF Operativ Tavle – Melhus/Orkland", layout="wide")
@@ -453,6 +592,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 d = last_data()
 vp = last_vaktplan()
+epost_cfg = last_epost_config()
 avvik_liste = last_liste(AVVIK_FIL)
 deltakelse_liste = last_liste(DELTAKELSE_FIL)
 akutte = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get("fulgt_opp")]
@@ -471,7 +611,7 @@ with st.sidebar:
             ⚡ {len(akutte)} avvik krever umiddelbar oppfølging!
             </div>""", unsafe_allow_html=True)
 
-    tab_del, tab_avvik, tab_vakt = st.tabs(["👤 Deltakelse", "⚠️ Avvik", "📋 Vaktinstruks"])
+    tab_del, tab_avvik, tab_vakt, tab_kalkyle = st.tabs(["👤 Deltakelse", "⚠️ Avvik", "📋 Vaktinstruks", "💰 Kalkyle"])
 
     with tab_del:
         with st.form("deltakelse_form", clear_on_submit=True):
@@ -524,21 +664,30 @@ with st.sidebar:
                 if not av_navn.strip() or not av_hendelse.strip():
                     st.error("Navn og hendelse er påkrevd.")
                 else:
-                    liste = last_liste(AVVIK_FIL)
-                    liste.append({
+                    nytt_avvik = {
+                        "id": datetime.now().strftime('%Y%m%d%H%M%S'),
                         "registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
                         "navn": av_navn.strip(),
                         "epost": av_epost.strip(),
                         "hendelse": av_hendelse.strip(),
                         "konsekvens": av_konsekvens.strip(),
                         "umiddelbar_oppfolging": av_umiddelbar,
-                        "fulgt_opp": False
-                    })
+                        "fulgt_opp": False,
+                        "oppfolging_notat": ""
+                    }
+                    liste = last_liste(AVVIK_FIL)
+                    liste.append(nytt_avvik)
                     lagre_liste(AVVIK_FIL, liste)
                     if av_umiddelbar:
                         st.warning("⚡ Avvik registrert – krever umiddelbar oppfølging!")
                     else:
                         st.success("✅ Avvik registrert!")
+                    # Send e-post
+                    ok, melding = send_avvik_epost(nytt_avvik, epost_cfg)
+                    if ok:
+                        st.caption(f"📧 {melding}")
+                    elif epost_cfg.get("smtp_server"):
+                        st.caption(f"⚠️ {melding}")
 
     with tab_vakt:
         if vp["aktiv"] and (vp["sted"] or vp["lagleder"]):
@@ -582,6 +731,107 @@ with st.sidebar:
             )
         else:
             st.info("Ingen aktiv vaktinstruks. Fyll ut under ⚙️ Administrasjon.")
+
+    with tab_kalkyle:
+        st.markdown("**Kalkyle – Sanitetsvakt**")
+
+        k_kunde       = st.text_input("Kunde / Arrangør", key="k_kunde", placeholder="Melhus IL")
+        k_arrangement = st.text_input("Arrangement", key="k_arr", placeholder="Sommerstevne 2026")
+        k_dato        = st.text_input("Dato for vakt", key="k_dato", placeholder="21.06.2026")
+
+        st.markdown("<small style='opacity:0.6;'>── Grunnlag ──</small>", unsafe_allow_html=True)
+        k_dager = st.number_input("Dager", min_value=0, value=1, step=1, key="k_dag")
+
+        st.markdown("<small style='opacity:0.6;'>── Mannskap ──</small>", unsafe_allow_html=True)
+        ks1, ks2 = st.columns(2)
+        with ks1:
+            k_san_ant   = st.number_input("Sanitet – pers.", min_value=0, value=0, step=1, key="k_s_ant")
+            k_ambu_ant  = st.number_input("Ambulanse – pers.", min_value=0, value=0, step=1, key="k_a_ant")
+        with ks2:
+            k_san_tim   = st.number_input("Sanitet – t/dag", min_value=0, value=0, step=1, key="k_s_tim")
+            k_ambu_tim  = st.number_input("Ambulanse – t/dag", min_value=0, value=0, step=1, key="k_a_tim")
+
+        st.markdown("<small style='opacity:0.6;'>── Kjøretøy ──</small>", unsafe_allow_html=True)
+        kv1, kv2, kv3 = st.columns(3)
+        with kv1: k_mbil  = st.number_input("Mannskapsbil", min_value=0, value=0, step=1, key="k_mbil")
+        with kv2: k_amb   = st.number_input("Ambulanse", min_value=0, value=0, step=1, key="k_amb")
+        with kv3: k_atv   = st.number_input("ATV", min_value=0, value=0, step=1, key="k_atv")
+
+        st.markdown("<small style='opacity:0.6;'>── Kjøring (km) ──</small>", unsafe_allow_html=True)
+        kk1, kk2 = st.columns(2)
+        with kk1:
+            k_km_51  = st.number_input("T/F tjenestested 5.1", min_value=0, value=0, step=1, key="k_51")
+            k_km_56  = st.number_input("T/F tjenestested 5.6", min_value=0, value=0, step=1, key="k_56")
+        with kk2:
+            k_km_bil = st.number_input("I tjeneste – bil", min_value=0, value=0, step=1, key="k_kbil")
+            k_km_amb = st.number_input("I tjeneste – ambulanse", min_value=0, value=0, step=1, key="k_kamb")
+        k_atv_tim = st.number_input("ATV/scooter i tjeneste (timer)", min_value=0, value=0, step=1, key="k_atv_t")
+
+        st.markdown("<small style='opacity:0.6;'>── Annet ──</small>", unsafe_allow_html=True)
+        k_forbruk = st.number_input("Forbruksmateriell (kr)", min_value=0, value=0, step=50, key="k_forb")
+
+        # Kalkulasjon
+        PRISER = {
+            "grunnpris": 800, "sanitet": 160, "ambulanse_m": 300,
+            "mbil": 300, "amb_kjt": 900, "atv_kjt": 300,
+            "km": 8, "atv_t": 200
+        }
+        linjer = [
+            ("Grunnpris",
+             f"{k_dager} dag{'er' if k_dager != 1 else ''} × {PRISER['grunnpris']} kr",
+             PRISER["grunnpris"] * k_dager),
+            ("Mannskap sanitet",
+             f"{k_san_ant} pers. × {k_dager} dag × {k_san_tim} t × {PRISER['sanitet']} kr",
+             PRISER["sanitet"] * k_san_ant * k_dager * k_san_tim),
+            ("Mannskap ambulanse",
+             f"{k_ambu_ant} pers. × {k_dager} dag × {k_ambu_tim} t × {PRISER['ambulanse_m']} kr",
+             PRISER["ambulanse_m"] * k_ambu_ant * k_dager * k_ambu_tim),
+            ("Mannskapsbil (grunnpris)",
+             f"{k_mbil} stk × {k_dager} dag × {PRISER['mbil']} kr",
+             PRISER["mbil"] * k_mbil * k_dager),
+            ("Ambulanse (grunnpris)",
+             f"{k_amb} stk × {k_dager} dag × {PRISER['amb_kjt']} kr",
+             PRISER["amb_kjt"] * k_amb * k_dager),
+            ("ATV 6.1 (grunnpris)",
+             f"{k_atv} stk × {k_dager} dag × {PRISER['atv_kjt']} kr",
+             PRISER["atv_kjt"] * k_atv * k_dager),
+            ("Kjøring t/f tjenestested 5.1",
+             f"{k_km_51} km × {PRISER['km']} kr",
+             PRISER["km"] * k_km_51),
+            ("Kjøring t/f tjenestested 5.6",
+             f"{k_km_56} km × {PRISER['km']} kr",
+             PRISER["km"] * k_km_56),
+            ("Kjøring i tjeneste – bil",
+             f"{k_km_bil} km × {PRISER['km']} kr",
+             PRISER["km"] * k_km_bil),
+            ("Kjøring i tjeneste – ambulanse",
+             f"{k_km_amb} km × {PRISER['km']} kr",
+             PRISER["km"] * k_km_amb),
+            ("Kjøring i tjeneste – ATV/scooter",
+             f"{k_atv_tim} t × {PRISER['atv_t']} kr",
+             PRISER["atv_t"] * k_atv_tim),
+        ]
+        total = sum(b for _, _, b in linjer) + k_forbruk
+
+        # Vis total
+        st.markdown(f"""
+        <div style='background:#cc0000; color:white; border-radius:8px;
+        padding:12px 16px; text-align:center; margin:10px 0;'>
+        <div style='font-size:0.8rem; opacity:0.85;'>ESTIMERT TOTALPRIS</div>
+        <div style='font-size:1.8rem; font-weight:bold;'>{total:,.0f} kr</div>
+        </div>""".replace(",", " "), unsafe_allow_html=True)
+
+        if st.button("📄 Generer tilbud", use_container_width=True, type="primary", key="k_gen"):
+            html = generer_tilbud_html(k_kunde, k_arrangement, k_dato, linjer, total, k_forbruk)
+            filnavn = f"tilbud_{(k_arrangement or 'sanitetsvakt').replace(' ','_')}_{datetime.now().strftime('%Y%m%d')}.html"
+            st.download_button(
+                "📥 Last ned tilbud (HTML)",
+                data=html.encode("utf-8"),
+                file_name=filnavn,
+                mime="text/html",
+                use_container_width=True,
+                key="k_dl"
+            )
 
     st.markdown("---")
     m1, m2 = st.columns(2)
@@ -909,16 +1159,85 @@ with st.expander("⚙️ Administrasjon & Logg"):
             st.caption("Ingen deltakelser registrert ennå.")
 
         st.markdown("---")
-        st.write("**⚠️ Registrerte avvik**")
-        if avvik_liste:
-            df_a = pd.DataFrame(avvik_liste)
-            df_a["umiddelbar_oppfolging"] = df_a["umiddelbar_oppfolging"].map({True: "⚡ Ja", False: "Nei"})
-            vis_kol = ["registrert", "navn", "hendelse", "konsekvens", "umiddelbar_oppfolging"]
-            df_a = df_a[[k for k in vis_kol if k in df_a.columns]]
-            df_a.columns = ["Tidspunkt", "Navn", "Hendelse", "Konsekvens", "Umiddelbar"][: len(df_a.columns)]
-            st.dataframe(df_a, use_container_width=True, hide_index=True)
-        else:
+        åpne = [a for a in avvik_liste if not a.get("fulgt_opp")]
+        lukkede = [a for a in avvik_liste if a.get("fulgt_opp")]
+        st.write(f"**⚠️ Avvik – {len(åpne)} åpne / {len(lukkede)} lukket**")
+
+        if not avvik_liste:
             st.caption("Ingen avvik registrert ennå.")
+        else:
+            avvik_endret = False
+            for i, a in enumerate(avvik_liste):
+                fulgt = a.get("fulgt_opp", False)
+                haster = a.get("umiddelbar_oppfolging", False) and not fulgt
+                border = "#dc3545" if haster else ("#28a745" if fulgt else "#ffc107")
+                bg = "rgba(40,167,69,0.07)" if fulgt else ("rgba(220,53,69,0.07)" if haster else "rgba(255,193,7,0.07)")
+                status_ikon = "✅ Lukket" if fulgt else ("⚡ Akutt" if haster else "🟡 Åpen")
+                st.markdown(f"""
+                <div style='border-left:4px solid {border}; background:{bg};
+                border-radius:6px; padding:10px 14px; margin-bottom:6px;'>
+                <b>{a.get('navn','–')}</b> &nbsp;·&nbsp;
+                <small style='opacity:0.7;'>{a.get('registrert','')}</small>
+                &nbsp;·&nbsp; <b>{status_ikon}</b><br>
+                <span style='font-size:0.9rem;'>{a.get('hendelse','')}</span>
+                {f"<br><small><i>Konsekvens: {a.get('konsekvens','')}</i></small>" if a.get('konsekvens') else ""}
+                {f"<br><small>📝 Oppfølging: {a.get('oppfolging_notat','')}</small>" if a.get('oppfolging_notat') else ""}
+                </div>""", unsafe_allow_html=True)
+
+                if not fulgt:
+                    kol_a, kol_b = st.columns([2, 1])
+                    with kol_a:
+                        notat = st.text_input(
+                            "Notat ved lukking", key=f"notat_{i}",
+                            placeholder="Tiltak / kommentar...",
+                            label_visibility="collapsed"
+                        )
+                    with kol_b:
+                        if st.button("✅ Marker lukket", key=f"lukk_{i}", use_container_width=True):
+                            avvik_liste[i]["fulgt_opp"] = True
+                            avvik_liste[i]["oppfolging_notat"] = notat
+                            avvik_endret = True
+                else:
+                    if st.button("↩️ Gjenåpne", key=f"aapne_{i}"):
+                        avvik_liste[i]["fulgt_opp"] = False
+                        avvik_endret = True
+
+            if avvik_endret:
+                lagre_liste(AVVIK_FIL, avvik_liste)
+                st.rerun()
+
+        st.markdown("---")
+        st.write("**📧 E-postkonfigurasjon for avvarsler**")
+        st.caption("Avvik sendes automatisk til oppgitt adresse ved registrering.")
+        ep1, ep2 = st.columns(2)
+        with ep1:
+            ep_server = st.text_input("SMTP-server", value=epost_cfg.get("smtp_server",""), placeholder="smtp.gmail.com")
+            ep_port   = st.text_input("Port", value=epost_cfg.get("smtp_port","587"), placeholder="587")
+            ep_bruker = st.text_input("SMTP-bruker", value=epost_cfg.get("smtp_bruker",""), placeholder="din@epost.no")
+        with ep2:
+            ep_passord = st.text_input("SMTP-passord", value=epost_cfg.get("smtp_passord",""), type="password")
+            ep_fra     = st.text_input("Fra-adresse", value=epost_cfg.get("fra",""), placeholder="nf-melhus@folkehjelp.no")
+            ep_til     = st.text_input("Send avvik til", value=epost_cfg.get("til",""), placeholder="leder@folkehjelp.no")
+
+        ep_kol1, ep_kol2 = st.columns(2)
+        with ep_kol1:
+            if st.button("💾 Lagre e-postkonfig", use_container_width=True):
+                lagre_epost_config({"smtp_server": ep_server, "smtp_port": ep_port,
+                    "smtp_bruker": ep_bruker, "smtp_passord": ep_passord,
+                    "fra": ep_fra, "til": ep_til})
+                st.toast("✅ E-postkonfigurasjon lagret!", icon="📧")
+                st.rerun()
+        with ep_kol2:
+            if st.button("📤 Send testmelding", use_container_width=True):
+                test = {"registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
+                        "navn": "Test", "epost": "", "hendelse": "Dette er en testmelding fra NF Operativ Tavle.",
+                        "konsekvens": "", "umiddelbar_oppfolging": False}
+                ok, melding = send_avvik_epost(test, {"smtp_server": ep_server, "smtp_port": ep_port,
+                    "smtp_bruker": ep_bruker, "smtp_passord": ep_passord, "fra": ep_fra, "til": ep_til})
+                if ok:
+                    st.success(f"✅ {melding}")
+                else:
+                    st.error(melding)
 
 st.markdown(
     f"<div style='text-align:right; color:#aaa;'>"
