@@ -288,7 +288,7 @@ akutte = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get
 # --- SIDEMENY ---
 with st.sidebar:
     if os.path.exists("nf_logo.png"):
-        st.image("nf_logo.png", use_container_width=True)
+        st.image("nf_logo.png", width=180)
     st.markdown("## 📋 Registreringer")
 
     if akutte:
