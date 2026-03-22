@@ -365,7 +365,8 @@ with st.sidebar:
         "🩹 Skaderegistrering",
         "📝 Loggføring",
         "📋 Vaktinstruks",
-        "💰 Kalkyle – Sanitetsvakt"
+        "💰 Kalkyle – Sanitetsvakt",
+        "⚙️ Administrasjon",
     ], label_visibility="collapsed")
 
     st.markdown("---")
@@ -526,140 +527,6 @@ if side == "🏠 Operativ tavle":
         if vp.get("notat"): st.info(f"📝 {vp['notat']}")
         st.download_button("📥 Eksporter beredskapsplan", data=generer_beredskapsplan(vp,d).encode("utf-8"),
                            file_name=f"beredskapsplan_{datetime.now().strftime('%Y%m%d_%H%M')}.html", mime="text/html")
-
-    # Admin
-    st.write("---")
-    st.markdown("<div style='text-align:right;color:#999;font-size:0.85rem;margin-bottom:-20px;'>⚙️ Administrasjon</div>", unsafe_allow_html=True)
-    with st.expander("⚙️ Administrasjon & Logg"):
-        if not st.session_state.get("admin_ok"):
-            st.markdown("🔒 **Adminpanelet er passordbeskyttet**")
-            pw = st.text_input("Passord", type="password", placeholder="Skriv inn passord...", label_visibility="collapsed")
-            if st.button("Logg inn", type="primary"):
-                if pw == "melhus123": st.session_state["admin_ok"]=True; st.rerun()
-                else: st.error("❌ Feil passord")
-        else:
-            cl,_ = st.columns([1,5])
-            with cl:
-                if st.button("🔓 Logg ut"): st.session_state["admin_ok"]=False; st.rerun()
-
-            a1,a2 = st.columns(2)
-            with a1:
-                sv=["🟢 Normal Beredskap","🟡 Forhøyet Beredskap","🔴 Rød / Høy beredskap"]
-                ns=st.selectbox("Nivå:",sv,index=sv.index(d['status']))
-                nb=st.text_area("Beskjed:",value=d['beskjed'])
-                kv=["Ingen","Daglig drift","Snøskred","Flom","Jordras","Ekom-bortfall","Isolasjon / Evakuering","Søk/Redning"]
-                nk=st.selectbox("Tiltakskort:",kv,index=kv.index(d['kort']))
-            with a2:
-                nl=st.text_input("Leder:",value=d['leder']); nv=st.text_input("Vakt-tlf:",value=d['vakt'])
-                nlog=st.text_area("Logg:",value=d['logg'],height=150)
-            st.write("**Infrastruktur**")
-            a3,a4=st.columns(2)
-            with a3:
-                ekv=["🟢 Normal drift","🟡 Redusert kapasitet/Utfall noen steder","🔴 Omfattende ekom-bortfall"]
-                ne=st.selectbox("Ekom:",ekv,index=ekv.index(d['ekom']))
-            with a4:
-                vev=["🟢 Veinett åpent","🟡 Lokale stengninger","🔴 Kritiske brudd / Isolerte bygder"]
-                nve=st.selectbox("Vei:",vev,index=vev.index(d['vei']))
-            if st.button("💾 Lagre beredskapsstatus",type="primary"):
-                lagre_json(FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"logg":nlog,"ekom":ne,"vei":nve})
-                st.toast("✅ Lagret!",icon="💾"); st.rerun()
-
-            st.markdown("---"); st.write("**📋 Vaktinstruks**")
-            vchk1, vchk2 = st.columns(2)
-            with vchk1: va=st.checkbox("Aktiver vaktinstruks",value=vp.get("aktiv",False))
-            with vchk2: vskjul=st.checkbox("Skjul på forsiden",value=vp.get("skjul_forside",False),
-                                            help="Instruksen er tilgjengelig via menyen, men vises ikke på operativ tavle.")
-            vp1,vp2=st.columns(2)
-            with vp1:
-                vs=st.text_input("📍 Sted",value=vp.get("sted",""))
-                vl=st.text_input("👷 Lagleder",value=vp.get("lagleder",""))
-                vtg=st.text_input("📻 Talegruppe",value=vp.get("talegruppe",""))
-                vlv=st.text_input("🏥 Legevakt",value=vp.get("legevakt",""))
-                vsh=st.text_input("🏨 Sykehus",value=vp.get("sykehus",""))
-            with vp2:
-                vtf=st.text_input("🕐 Tid fra",value=vp.get("tid_fra",""),placeholder="08:00")
-                vtt=st.text_input("🕑 Tid til",value=vp.get("tid_til",""),placeholder="16:00")
-                rp=beregn_rig(vtf)
-                if rp: st.caption(f"⏰ Ferdig rigget: **{rp}**")
-                vm=st.text_area("👥 Mannskaper",value=vp.get("mannskaper",""),height=100,placeholder="Ett navn per linje")
-                vu=st.text_area("🎒 Utstyr",value=vp.get("utstyr",""),height=100,placeholder="Ett element per linje")
-            vn=st.text_area("📝 Notat",value=vp.get("notat",""),height=60)
-            vba,vbb=st.columns(2)
-            with vba:
-                if st.button("💾 Lagre vaktinstruks",type="primary",use_container_width=True):
-                    lagre_json(VAKTPLAN_FIL,{"aktiv":va,"skjul_forside":vskjul,"sted":vs,"lagleder":vl,
-                        "talegruppe":vtg,"legevakt":vlv,"sykehus":vsh,"tid_fra":vtf,"tid_til":vtt,
-                        "mannskaper":vm,"utstyr":vu,"notat":vn})
-                    st.toast("✅ Lagret!",icon="📋"); st.rerun()
-            with vbb:
-                if st.button("🗑️ Nullstill instruks",use_container_width=True):
-                    lagre_json(VAKTPLAN_FIL,dict(VP_DEFAULTS))
-                    st.toast("🗑️ Instruks nullstilt",icon="🗑️"); st.rerun()
-
-            st.markdown("---")
-            åpne=[a for a in avvik_liste if not a.get("fulgt_opp")]
-            lukkede=[a for a in avvik_liste if a.get("fulgt_opp")]
-            st.write(f"**⚠️ Avvik – {len(åpne)} åpne / {len(lukkede)} lukket**")
-            if not avvik_liste:
-                st.caption("Ingen avvik ennå.")
-            else:
-                endret=False
-                for i,a in enumerate(avvik_liste):
-                    fulgt=a.get("fulgt_opp",False); haster=a.get("umiddelbar_oppfolging",False) and not fulgt
-                    brd="#dc3545" if haster else ("#28a745" if fulgt else "#ffc107")
-                    bga="rgba(40,167,69,0.07)" if fulgt else ("rgba(220,53,69,0.07)" if haster else "rgba(255,193,7,0.07)")
-                    ikon="✅ Lukket" if fulgt else ("⚡ Akutt" if haster else "🟡 Åpen")
-                    st.markdown(f"""<div style='border-left:4px solid {brd};background:{bga};
-                    border-radius:6px;padding:10px 14px;margin-bottom:6px;'>
-                    <b>{a.get('navn','–')}</b> · <small style='opacity:0.7;'>{a.get('registrert','')}</small> · <b>{ikon}</b><br>
-                    <span style='font-size:0.9rem;'>{a.get('hendelse','')}</span>
-                    {f"<br><small><i>{a.get('konsekvens','')}</i></small>" if a.get('konsekvens') else ""}
-                    {f"<br><small>📝 {a.get('oppfolging_notat','')}</small>" if a.get('oppfolging_notat') else ""}
-                    </div>""", unsafe_allow_html=True)
-                    if not fulgt:
-                        ka,kb=st.columns([2,1])
-                        with ka: notat=st.text_input("Notat",key=f"notat_{i}",placeholder="Tiltak...",label_visibility="collapsed")
-                        with kb:
-                            if st.button("✅ Lukk",key=f"lukk_{i}",use_container_width=True):
-                                avvik_liste[i]["fulgt_opp"]=True; avvik_liste[i]["oppfolging_notat"]=notat; endret=True
-                    else:
-                        da1,da2=st.columns(2)
-                        with da1:
-                            if st.button("↩️ Gjenåpne",key=f"aa_{i}",use_container_width=True):
-                                avvik_liste[i]["fulgt_opp"]=False; endret=True
-                        with da2:
-                            if st.button("🗑️ Slett",key=f"slett_{i}",use_container_width=True,
-                                         help="Sletter avviket permanent – kun mulig etter lukking"):
-                                avvik_liste.pop(i); lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
-                if endret: lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
-
-            st.markdown("---"); st.write("**📋 Registrerte deltakelser**")
-            if del_liste:
-                dfd=pd.DataFrame(del_liste)[["registrert","navn","oppdrag","tid_ut","tid_inn","utlegg_kr"]]
-                dfd.columns=["Tidspunkt","Navn","Oppdrag","Tid ut","Tid inn","Utlegg (kr)"]
-                st.dataframe(dfd,use_container_width=True,hide_index=True)
-            else: st.caption("Ingen deltakelser ennå.")
-
-            st.markdown("---"); st.write("**📧 E-postkonfigurasjon**")
-            ep1,ep2=st.columns(2)
-            with ep1:
-                esrv=st.text_input("SMTP-server",value=epost_cfg.get("smtp_server",""),placeholder="smtp.gmail.com")
-                eprt=st.text_input("Port",value=epost_cfg.get("smtp_port","587"))
-                ebrk=st.text_input("SMTP-bruker",value=epost_cfg.get("smtp_bruker",""))
-            with ep2:
-                epas=st.text_input("SMTP-passord",value=epost_cfg.get("smtp_passord",""),type="password")
-                efra=st.text_input("Fra-adresse",value=epost_cfg.get("fra",""))
-                etil=st.text_input("Send til",value=epost_cfg.get("til",""))
-            ec1,ec2=st.columns(2)
-            with ec1:
-                if st.button("💾 Lagre e-postkonfig",use_container_width=True):
-                    lagre_json(EPOST_CONFIG_FIL,{"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,"smtp_passord":epas,"fra":efra,"til":etil})
-                    st.toast("✅ E-postkonfig lagret!",icon="📧"); st.rerun()
-            with ec2:
-                if st.button("📤 Send testmelding",use_container_width=True):
-                    ok,m=send_avvik_epost({"registrert":datetime.now().strftime('%d.%m.%Y %H:%M'),"navn":"Test","epost":"","hendelse":"Testmelding.","konsekvens":"","umiddelbar_oppfolging":False},
-                                          {"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,"smtp_passord":epas,"fra":efra,"til":etil})
-                    st.success(f"✅ {m}") if ok else st.error(m)
 
     st.markdown(f"<div style='text-align:right;color:#aaa;'><small>Sist lastet: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</small></div>", unsafe_allow_html=True)
 
@@ -1165,3 +1032,157 @@ elif side == "💰 Kalkyle – Sanitetsvakt":
             st.download_button("📥 Last ned tilbud (HTML)",data=html.encode("utf-8"),
                                file_name=fn,mime="text/html",use_container_width=True,key="dl_t")
         st.caption("Åpne i nettleseren → Ctrl+P for å lagre som PDF.")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: ADMINISTRASJON
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "⚙️ Administrasjon":
+    st.markdown("<h2>⚙️ Administrasjon</h2>", unsafe_allow_html=True)
+
+    if not st.session_state.get("admin_ok"):
+        st.markdown("""<div style='max-width:380px;margin:60px auto;text-align:center;'>
+        <div style='font-size:3rem;margin-bottom:16px;'>🔒</div>
+        <div style='font-size:1.2rem;font-weight:bold;margin-bottom:8px;'>Adminpanelet er passordbeskyttet</div>
+        <div style='opacity:0.6;font-size:0.9rem;margin-bottom:24px;'>Kun autoriserte brukere har tilgang.</div>
+        </div>""", unsafe_allow_html=True)
+        _,lc,_ = st.columns([1,2,1])
+        with lc:
+            pw = st.text_input("Passord", type="password", placeholder="Skriv inn passord...", label_visibility="collapsed")
+            if st.button("🔓 Logg inn", type="primary", use_container_width=True):
+                if pw == "melhus123": st.session_state["admin_ok"]=True; st.rerun()
+                else: st.error("❌ Feil passord")
+    else:
+        cl,_ = st.columns([1,5])
+        with cl:
+            if st.button("🔒 Logg ut"): st.session_state["admin_ok"]=False; st.rerun()
+        st.write("")
+
+        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser","📧 E-post"])
+
+        # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
+        with adm_tabs[0]:
+            a1,a2 = st.columns(2)
+            with a1:
+                sv=["🟢 Normal Beredskap","🟡 Forhøyet Beredskap","🔴 Rød / Høy beredskap"]
+                ns=st.selectbox("Beredskapsnivå",sv,index=sv.index(d['status']))
+                nb=st.text_area("Beskjed til stab",value=d['beskjed'])
+                kv=["Ingen","Daglig drift","Snøskred","Flom","Jordras","Ekom-bortfall","Isolasjon / Evakuering","Søk/Redning"]
+                nk=st.selectbox("Tiltakskort",kv,index=kv.index(d['kort']))
+            with a2:
+                nl=st.text_input("Leder",value=d['leder'])
+                nv=st.text_input("Vakt-tlf",value=d['vakt'])
+                nlog=st.text_area("Operativ logg",value=d['logg'],height=130)
+            st.write("**📡 Infrastruktur**")
+            a3,a4=st.columns(2)
+            with a3:
+                ekv=["🟢 Normal drift","🟡 Redusert kapasitet/Utfall noen steder","🔴 Omfattende ekom-bortfall"]
+                ne=st.selectbox("Ekom",ekv,index=ekv.index(d['ekom']))
+            with a4:
+                vev=["🟢 Veinett åpent","🟡 Lokale stengninger","🔴 Kritiske brudd / Isolerte bygder"]
+                nve=st.selectbox("Vei",vev,index=vev.index(d['vei']))
+            if st.button("💾 Lagre beredskapsstatus", type="primary"):
+                lagre_json(FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"logg":nlog,"ekom":ne,"vei":nve})
+                st.toast("✅ Lagret!",icon="💾"); st.rerun()
+
+        # ── Tab 2: Vaktinstruks ──────────────────────────────────────────────
+        with adm_tabs[1]:
+            vchk1,vchk2=st.columns(2)
+            with vchk1: va=st.checkbox("Aktiver vaktinstruks",value=vp.get("aktiv",False))
+            with vchk2: vskjul=st.checkbox("Skjul på forsiden",value=vp.get("skjul_forside",False))
+            vp1,vp2=st.columns(2)
+            with vp1:
+                vs=st.text_input("📍 Sted",value=vp.get("sted",""))
+                vl=st.text_input("👷 Lagleder",value=vp.get("lagleder",""))
+                vtg=st.text_input("📻 Talegruppe",value=vp.get("talegruppe",""))
+                vlv=st.text_input("🏥 Legevakt",value=vp.get("legevakt",""))
+                vsh=st.text_input("🏨 Sykehus",value=vp.get("sykehus",""))
+            with vp2:
+                vtf=st.text_input("🕐 Tid fra",value=vp.get("tid_fra",""),placeholder="08:00")
+                vtt=st.text_input("🕑 Tid til",value=vp.get("tid_til",""),placeholder="16:00")
+                rp=beregn_rig(vtf)
+                if rp: st.caption(f"⏰ Ferdig rigget: **{rp}**")
+                vm=st.text_area("👥 Mannskaper",value=vp.get("mannskaper",""),height=100,placeholder="Ett navn per linje")
+                vu=st.text_area("🎒 Utstyr",value=vp.get("utstyr",""),height=100,placeholder="Ett element per linje")
+            vn=st.text_area("📝 Notat",value=vp.get("notat",""),height=60)
+            vba,vbb=st.columns(2)
+            with vba:
+                if st.button("💾 Lagre vaktinstruks",type="primary",use_container_width=True):
+                    lagre_json(VAKTPLAN_FIL,{"aktiv":va,"skjul_forside":vskjul,"sted":vs,"lagleder":vl,
+                        "talegruppe":vtg,"legevakt":vlv,"sykehus":vsh,"tid_fra":vtf,"tid_til":vtt,
+                        "mannskaper":vm,"utstyr":vu,"notat":vn})
+                    st.toast("✅ Lagret!",icon="📋"); st.rerun()
+            with vbb:
+                if st.button("🗑️ Nullstill instruks",use_container_width=True):
+                    lagre_json(VAKTPLAN_FIL,dict(VP_DEFAULTS))
+                    st.toast("🗑️ Nullstilt",icon="🗑️"); st.rerun()
+
+        # ── Tab 3: Avvik ─────────────────────────────────────────────────────
+        with adm_tabs[2]:
+            åpne=[a for a in avvik_liste if not a.get("fulgt_opp")]
+            lukkede=[a for a in avvik_liste if a.get("fulgt_opp")]
+            st.caption(f"{len(åpne)} åpne · {len(lukkede)} lukket")
+            if not avvik_liste:
+                st.info("Ingen avvik registrert ennå.")
+            else:
+                endret=False
+                for i,a in enumerate(avvik_liste):
+                    fulgt=a.get("fulgt_opp",False); haster=a.get("umiddelbar_oppfolging",False) and not fulgt
+                    brd="#dc3545" if haster else ("#28a745" if fulgt else "#ffc107")
+                    bga="rgba(40,167,69,0.07)" if fulgt else ("rgba(220,53,69,0.07)" if haster else "rgba(255,193,7,0.07)")
+                    ikon="✅ Lukket" if fulgt else ("⚡ Akutt" if haster else "🟡 Åpen")
+                    st.markdown(f"""<div style='border-left:4px solid {brd};background:{bga};
+                    border-radius:6px;padding:10px 14px;margin-bottom:6px;'>
+                    <b>{a.get('navn','–')}</b> · <small style='opacity:0.6;'>{a.get('registrert','')}</small> · <b>{ikon}</b><br>
+                    <span style='font-size:0.9rem;'>{a.get('hendelse','')}</span>
+                    {f"<br><small><i>{a.get('konsekvens','')}</i></small>" if a.get('konsekvens') else ""}
+                    {f"<br><small>📝 {a.get('oppfolging_notat','')}</small>" if a.get('oppfolging_notat') else ""}
+                    </div>""", unsafe_allow_html=True)
+                    if not fulgt:
+                        ka,kb=st.columns([2,1])
+                        with ka: notat=st.text_input("Notat",key=f"an_{i}",placeholder="Tiltak...",label_visibility="collapsed")
+                        with kb:
+                            if st.button("✅ Lukk",key=f"al_{i}",use_container_width=True):
+                                avvik_liste[i]["fulgt_opp"]=True; avvik_liste[i]["oppfolging_notat"]=notat; endret=True
+                    else:
+                        da1,da2=st.columns(2)
+                        with da1:
+                            if st.button("↩️ Gjenåpne",key=f"ag_{i}",use_container_width=True):
+                                avvik_liste[i]["fulgt_opp"]=False; endret=True
+                        with da2:
+                            if st.button("🗑️ Slett",key=f"as_{i}",use_container_width=True):
+                                avvik_liste.pop(i); lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
+                if endret: lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
+
+        # ── Tab 4: Deltakelser ───────────────────────────────────────────────
+        with adm_tabs[3]:
+            if del_liste:
+                dfd=pd.DataFrame(del_liste)[["registrert","navn","oppdrag","tid_ut","tid_inn","utlegg_kr"]]
+                dfd.columns=["Tidspunkt","Navn","Oppdrag","Tid ut","Tid inn","Utlegg (kr)"]
+                st.dataframe(dfd,use_container_width=True,hide_index=True)
+            else:
+                st.info("Ingen deltakelser registrert ennå.")
+
+        # ── Tab 5: E-post ────────────────────────────────────────────────────
+        with adm_tabs[4]:
+            ep1,ep2=st.columns(2)
+            with ep1:
+                esrv=st.text_input("SMTP-server",value=epost_cfg.get("smtp_server",""),placeholder="smtp.gmail.com")
+                eprt=st.text_input("Port",value=epost_cfg.get("smtp_port","587"))
+                ebrk=st.text_input("SMTP-bruker",value=epost_cfg.get("smtp_bruker",""))
+            with ep2:
+                epas=st.text_input("SMTP-passord",value=epost_cfg.get("smtp_passord",""),type="password")
+                efra=st.text_input("Fra-adresse",value=epost_cfg.get("fra",""))
+                etil=st.text_input("Send til",value=epost_cfg.get("til",""))
+            ec1,ec2=st.columns(2)
+            with ec1:
+                if st.button("💾 Lagre e-postkonfig",use_container_width=True):
+                    lagre_json(EPOST_CONFIG_FIL,{"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,
+                                                  "smtp_passord":epas,"fra":efra,"til":etil})
+                    st.toast("✅ Lagret!",icon="📧"); st.rerun()
+            with ec2:
+                if st.button("📤 Send testmelding",use_container_width=True):
+                    ok,m=send_avvik_epost({"registrert":datetime.now().strftime('%d.%m.%Y %H:%M'),"navn":"Test",
+                                           "epost":"","hendelse":"Testmelding.","konsekvens":"","umiddelbar_oppfolging":False},
+                                          {"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,
+                                           "smtp_passord":epas,"fra":efra,"til":etil})
+                    st.success(f"✅ {m}") if ok else st.error(m)
