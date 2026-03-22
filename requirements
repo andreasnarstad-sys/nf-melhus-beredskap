@@ -3,4 +3,3 @@ requests
 pandas
 gspread
 google-auth
-resend
