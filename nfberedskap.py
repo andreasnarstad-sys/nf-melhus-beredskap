@@ -209,25 +209,30 @@ def beregn_rig(tid):
 
 # ── E-POST ───────────────────────────────────────────────────────────────────
 
-def send_avvik_epost(avvik, cfg):
-    if not cfg.get("smtp_server") or not cfg.get("til") or not cfg.get("fra"):
-        return False,"E-postkonfig mangler (SMTP, fra og til er påkrevd)."
+def send_avvik_epost(avvik, cfg=None):
     try:
-        haster=avvik.get("umiddelbar_oppfolging",False)
-        msg=MIMEMultipart()
-        msg['From']=cfg['fra']; msg['To']=cfg['til']
-        msg['Subject']=f"{'⚡ AKUTT – ' if haster else ''}Avvik – NF Melhus/Orkland"
-        msg.attach(MIMEText(
-            f"Tidspunkt : {avvik['registrert']}\nNavn      : {avvik['navn']}\n"
-            f"E-post    : {avvik.get('epost') or '–'}\nHaster    : {'⚡ JA' if haster else 'Nei'}\n\n"
-            f"HENDELSE:\n{avvik['hendelse']}\n\nKONSEKVENS:\n{avvik.get('konsekvens') or '–'}\n\n"
-            f"---\nNF Operativ Tavle – Melhus & Orkland",'plain','utf-8'))
-        with smtplib.SMTP(cfg['smtp_server'],int(cfg.get('smtp_port',587)),timeout=10) as srv:
-            srv.ehlo(); srv.starttls(); srv.ehlo()
-            if cfg.get('smtp_bruker') and cfg.get('smtp_passord'): srv.login(cfg['smtp_bruker'],cfg['smtp_passord'])
-            srv.send_message(msg)
-        return True,f"E-post sendt til {cfg['til']}"
-    except Exception as e: return False,f"E-postfeil: {e}"
+        import resend as _resend
+        _resend.api_key = st.secrets["resend"]["api_key"]
+        haster = avvik.get("umiddelbar_oppfolging", False)
+        til = "andreas.narstad@gmail.com"
+        tekst = (
+            f"Tidspunkt : {avvik['registrert']}\n"
+            f"Navn      : {avvik['navn']}\n"
+            f"E-post    : {avvik.get('epost') or '–'}\n"
+            f"Haster    : {'⚡ JA' if haster else 'Nei'}\n\n"
+            f"HENDELSE:\n{avvik['hendelse']}\n\n"
+            f"KONSEKVENS:\n{avvik.get('konsekvens') or '–'}\n\n"
+            f"---\nNF Operativ Tavle – Melhus & Orkland"
+        )
+        _resend.Emails.send({
+            "from": "NF Beredskap <onboarding@resend.dev>",
+            "to": [til],
+            "subject": f"{'⚡ AKUTT – ' if haster else ''}Avvik – NF Melhus/Orkland",
+            "text": tekst,
+        })
+        return True, f"E-post sendt til {til}"
+    except Exception as e:
+        return False, f"E-postfeil: {e}"
 
 # ── API ───────────────────────────────────────────────────────────────────────
 
