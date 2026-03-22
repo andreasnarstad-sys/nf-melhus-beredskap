@@ -331,7 +331,7 @@ CSS = """
 # APP START
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.set_page_config(page_title="NF Operativ Tavle – Melhus/Orkland", layout="wide", page_icon="🚑")
+st.set_page_config(page_title="NF Operativ Tavle – Melhus og omegn", layout="wide", page_icon="🚑")
 st.markdown(CSS, unsafe_allow_html=True)
 
 d            = last_json(FIL, DEFAULTS)
@@ -346,7 +346,9 @@ akutte       = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not
 # ── SIDEMENY ──────────────────────────────────────────────────────────────────
 with st.sidebar:
     if os.path.exists("nf_logo.png"):
-        st.image("nf_logo.png", use_container_width=True)
+        st.markdown("<div style='text-align:center;padding:10px 16px 4px;'>", unsafe_allow_html=True)
+        st.image("nf_logo.png", width=180)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     bg = STATUS_FARGER.get(d['status'], "#333")
     st.markdown(f"<div style='background:{bg};color:white;padding:10px 14px;border-radius:8px;"
@@ -379,7 +381,7 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════════════════════════════
 if side == "🏠 Operativ tavle":
 
-    st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp: Melhus & Orkland</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp Melhus og omegn</h2>", unsafe_allow_html=True)
 
     # Status-banner
     st.markdown(f"""<div style="background:{bg};padding:20px;border-radius:15px;
