@@ -7,6 +7,13 @@ from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials as GSCredentials
+    HAS_GSPREAD = True
+except ImportError:
+    HAS_GSPREAD = False
+
 # ── KONFIGURASJON ────────────────────────────────────────────────────────────
 
 STD_HEADERS = {'User-Agent':'NorskFolkehjelpBeredskap/28.0','Accept':'application/json'}
@@ -49,6 +56,121 @@ SKADE_FIL        = "skade_data.json"
 LOGG_FIL         = "logg_data.json"
 EPOST_CONFIG_FIL = "epost_config.json"
 VEDLEGG_MAPPE    = "vedlegg"
+
+# ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
+
+DELTAKELSE_HDR = ["registrert","navn","oppdrag","tid_ut","tid_inn","utlegg_kr","vedlegg"]
+AVVIK_HDR      = ["id","registrert","navn","epost","hendelse","konsekvens",
+                   "umiddelbar_oppfolging","fulgt_opp","oppfolging_notat"]
+SKADE_HDR      = ["registrert","innsats","behandler","kjonn","alder","skadetype",
+                   "behandling","rad","konsultert","utstyr","merknad"]
+LOGG_HDR       = ["id","tidspunkt","forfatter","gradering","tekst"]
+
+_GS_BOOL   = {"vaktplan":["aktiv","skjul_forside"],
+               "avvik":["umiddelbar_oppfolging","fulgt_opp"]}
+_GS_JSON   = {"skade":["skadetype","utstyr"],"deltakelse":["vedlegg"]}
+
+@st.cache_resource
+def _gs_sh():
+    """Cached spreadsheet connection – gjenbrukes på tvers av alle renders."""
+    if not HAS_GSPREAD: return None
+    try:
+        if "gcp_service_account" not in st.secrets: return None
+        # Bruker service_account_from_dict (nyeste gspread API, ingen deprecated-advarsler)
+        gc = gspread.service_account_from_dict(dict(st.secrets["gcp_service_account"]))
+        return gc.open_by_key(st.secrets["google_sheets"]["spreadsheet_id"])
+    except Exception:
+        return None
+
+def _gs_ws(tab):
+    sh = _gs_sh()
+    if not sh: return None
+    try: return sh.worksheet(tab)
+    except Exception:
+        try: return sh.add_worksheet(title=tab, rows=5000, cols=50)
+        except: return None
+
+def _gs_deser(row, tab):
+    r = dict(row)
+    for f in _GS_BOOL.get(tab, []):
+        if f in r:
+            v = r[f]
+            r[f] = (v is True or str(v).upper() in ("TRUE", "1", "YES"))
+    for f in _GS_JSON.get(tab, []):
+        if f in r and isinstance(r[f], str):
+            try: r[f] = json.loads(r[f]) if r[f] else []
+            except: r[f] = []
+    return r
+
+def _gs_ser_val(v):
+    if isinstance(v, bool): return "TRUE" if v else "FALSE"
+    if isinstance(v, list): return json.dumps(v, ensure_ascii=False)
+    return str(v) if v is not None else ""
+
+@st.cache_data(ttl=12)
+def _gs_fetch(tab):
+    """Henter alle rader fra et ark – cachet i 12 sek for å begrense API-kall."""
+    ws = _gs_ws(tab)
+    if ws is None: return None
+    try: return ws.get_all_records()
+    except: return None
+
+def _gs_invalidate():
+    """Tømmer bare data-cachen (ikke vær/NVE) etter skriveoperasjoner."""
+    _gs_fetch.clear()
+
+def gs_last_json(tab, fallback_fil, defaults):
+    recs = _gs_fetch(tab)
+    if recs is None: return last_json(fallback_fil, defaults)
+    if not recs: return dict(defaults)
+    row = _gs_deser(recs[0], tab)
+    r = dict(defaults); r.update({k: v for k, v in row.items() if k in defaults})
+    return r
+
+def gs_lagre_json(tab, fallback_fil, data):
+    ws = _gs_ws(tab)
+    if ws is None: lagre_json(fallback_fil, data); return
+    try:
+        hdrs = list(data.keys())
+        vals = [_gs_ser_val(v) for v in data.values()]
+        # Én batch-oppdatering = 1 API-kall uansett størrelse
+        ws.update([hdrs, vals], value_input_option="RAW")
+        _gs_invalidate()
+    except Exception as e:
+        st.warning(f"GS lagringsfeil: {e}")
+        lagre_json(fallback_fil, data)
+
+def gs_last_liste(tab, fallback_fil):
+    recs = _gs_fetch(tab)
+    if recs is None: return last_liste(fallback_fil)
+    return [_gs_deser(r, tab) for r in recs]
+
+def gs_append(tab, fallback_fil, row_dict, headers):
+    ws = _gs_ws(tab)
+    if ws is None:
+        lst = last_liste(fallback_fil); lst.append(row_dict); lagre_liste(fallback_fil, lst); return
+    try:
+        existing = ws.get_all_values()
+        if not existing: ws.append_row(headers)
+        ws.append_row([_gs_ser_val(row_dict.get(h, "")) for h in headers],
+                      value_input_option="RAW")
+        _gs_invalidate()
+    except Exception as e:
+        st.warning(f"GS lagringsfeil: {e}")
+        lst = last_liste(fallback_fil); lst.append(row_dict); lagre_liste(fallback_fil, lst)
+
+def gs_lagre_liste(tab, fallback_fil, data, headers):
+    ws = _gs_ws(tab)
+    if ws is None: lagre_liste(fallback_fil, data); return
+    try:
+        rows = [headers] + [[_gs_ser_val(row.get(h, "")) for h in headers] for row in data]
+        # ws.update() = alltid 1 API-kall, uansett antall rader
+        ws.clear()
+        if rows: ws.update(rows, value_input_option="RAW")
+        _gs_invalidate()
+    except Exception as e:
+        st.warning(f"GS lagringsfeil: {e}")
+        lagre_liste(fallback_fil, data)
 
 DEFAULTS = {"status":"🟢 Normal Beredskap","beskjed":"Klar til innsats i Melhus og omegn.",
             "leder":"Ikke satt","vakt":"9XX XX XXX","kort":"Daglig drift",
@@ -334,13 +456,13 @@ CSS = """
 st.set_page_config(page_title="NF Operativ Tavle – Melhus og omegn", layout="wide", page_icon="🚑")
 st.markdown(CSS, unsafe_allow_html=True)
 
-d            = last_json(FIL, DEFAULTS)
-vp           = last_json(VAKTPLAN_FIL, VP_DEFAULTS)
-epost_cfg    = last_json(EPOST_CONFIG_FIL, EP_DEFAULTS)
-avvik_liste  = last_liste(AVVIK_FIL)
-del_liste    = last_liste(DELTAKELSE_FIL)
-skade_liste  = last_liste(SKADE_FIL)
-logg_liste   = last_liste(LOGG_FIL)
+d            = gs_last_json("beredskap",    FIL,              DEFAULTS)
+vp           = gs_last_json("vaktplan",     VAKTPLAN_FIL,     VP_DEFAULTS)
+epost_cfg    = gs_last_json("epost_config", EPOST_CONFIG_FIL, EP_DEFAULTS)
+avvik_liste  = gs_last_liste("avvik",   AVVIK_FIL)
+del_liste    = gs_last_liste("deltakelse", DELTAKELSE_FIL)
+skade_liste  = gs_last_liste("skade",   SKADE_FIL)
+logg_liste   = gs_last_liste("logg",    LOGG_FIL)
 akutte       = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get("fulgt_opp")]
 
 # ── SIDEMENY ──────────────────────────────────────────────────────────────────
@@ -557,16 +679,15 @@ elif side == "👤 Registrer deltakelse":
                     fn=f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{f.name}"
                     with open(os.path.join(VEDLEGG_MAPPE,fn),"wb") as fp: fp.write(f.read())
                     vn.append(fn)
-                liste=last_liste(DELTAKELSE_FIL)
-                liste.append({"registrert":datetime.now().strftime('%d.%m.%Y %H:%M'),"navn":navn.strip(),
-                              "oppdrag":oppdrag,"tid_ut":tid_ut.strip(),"tid_inn":tid_inn.strip(),
-                              "utlegg_kr":utlegg,"vedlegg":vn})
-                lagre_liste(DELTAKELSE_FIL,liste)
+                gs_append("deltakelse",DELTAKELSE_FIL,
+                          {"registrert":datetime.now().strftime('%d.%m.%Y %H:%M'),"navn":navn.strip(),
+                           "oppdrag":oppdrag,"tid_ut":tid_ut.strip(),"tid_inn":tid_inn.strip(),
+                           "utlegg_kr":utlegg,"vedlegg":vn},DELTAKELSE_HDR)
                 st.success(f"✅ Deltakelse registrert for **{navn.strip()}**")
 
     st.write("---"); st.subheader("📋 Registreringer i dag")
     today=datetime.now().strftime('%d.%m.%Y')
-    dagens=[r for r in last_liste(DELTAKELSE_FIL) if r.get("registrert","").startswith(today)]
+    dagens=[r for r in gs_last_liste("deltakelse", DELTAKELSE_FIL) if r.get("registrert","").startswith(today)]
     if dagens:
         dfd=pd.DataFrame(dagens)[["registrert","navn","oppdrag","tid_ut","tid_inn","utlegg_kr"]]
         dfd.columns=["Tidspunkt","Navn","Oppdrag","Tid ut","Tid inn","Utlegg (kr)"]
@@ -599,7 +720,7 @@ elif side == "⚠️ Registrer avvik":
                       "navn":av_navn.strip(),"epost":av_epost.strip(),
                       "hendelse":av_hendelse.strip(),"konsekvens":av_konsekvens.strip(),
                       "umiddelbar_oppfolging":av_umiddelbar,"fulgt_opp":False,"oppfolging_notat":""}
-                liste=last_liste(AVVIK_FIL); liste.append(nytt); lagre_liste(AVVIK_FIL,liste)
+                gs_append("avvik",AVVIK_FIL,nytt,AVVIK_HDR)
                 if av_umiddelbar: st.warning("⚡ Avvik registrert – merket som akutt!")
                 else: st.success("✅ Avvik registrert. Takk for tilbakemeldingen.")
                 ok,mel=send_avvik_epost(nytt,epost_cfg)
@@ -644,11 +765,11 @@ elif side == "🩹 Skaderegistrering":
                       "skadetype": sk_skadetype, "behandling": sk_behandling.strip(),
                       "rad": sk_rad.strip(), "konsultert": sk_konsultert,
                       "utstyr": sk_utstyr, "merknad": sk_merknad.strip()}
-                liste = last_liste(SKADE_FIL); liste.append(ny); lagre_liste(SKADE_FIL, liste)
+                gs_append("skade",SKADE_FIL,ny,SKADE_HDR)
                 st.success(f"✅ Skade registrert av **{sk_behandler.strip()}**")
 
     st.write("---")
-    fresh_skade = last_liste(SKADE_FIL)
+    fresh_skade = gs_last_liste("skade", SKADE_FIL)
     if fresh_skade:
         st.subheader(f"📋 Registrerte skader ({len(fresh_skade)} totalt)")
         for i, s in enumerate(reversed(fresh_skade)):
@@ -690,7 +811,7 @@ elif side == "📝 Loggføring":
         if st.button("← Tilbake til logg", key="komm_tilbake"):
             st.session_state["komm_modus"] = False; st.rerun()
         st.write("")
-        fresh = last_liste(LOGG_FIL)
+        fresh = gs_last_liste("logg", LOGG_FIL)
         frigjorte = [e for e in fresh if e.get("gradering") == "frigjort"]
         if not frigjorte:
             st.markdown("""<div style='text-align:center;padding:60px 20px;opacity:0.5;'>
@@ -722,7 +843,7 @@ elif side == "📝 Loggføring":
             st.session_state["komm_modus"] = True; st.rerun()
 
     # ── STATISTIKKBAR ─────────────────────────────────────────────────────────
-    fresh_logg = last_liste(LOGG_FIL)
+    fresh_logg = gs_last_liste("logg", LOGG_FIL)
     n_media  = sum(1 for e in fresh_logg if e.get("gradering")=="frigjort")
     n_intern = sum(1 for e in fresh_logg if e.get("gradering")=="intern_offentlig")
     n_laaст  = sum(1 for e in fresh_logg if e.get("gradering")=="intern_ikke_off")
@@ -780,12 +901,12 @@ elif side == "📝 Loggføring":
                           "forfatter": lf_forfatter.strip() or "Admin",
                           "tekst": lf_tekst.strip(),
                           "gradering": lf_grad}
-                    liste = last_liste(LOGG_FIL); liste.append(ny); lagre_liste(LOGG_FIL, liste)
+                    gs_append("logg", LOGG_FIL, ny, LOGG_HDR)
                     st.toast(f"✅ Logget som {g['ikon']} {g['kort']}", icon="📝"); st.rerun()
 
     # ── LOGG-TIDSLINJE ────────────────────────────────────────────────────────
     st.write("---")
-    fresh_logg = last_liste(LOGG_FIL)
+    fresh_logg = gs_last_liste("logg", LOGG_FIL)
 
     if not fresh_logg:
         st.markdown("""<div style='text-align:center;padding:50px 20px;opacity:0.4;'>
@@ -871,8 +992,8 @@ elif side == "📝 Loggføring":
                 with col_del:
                     st.write("")
                     if st.button("🗑️", key=f"del_logg_{e.get('id',i)}", help="Slett oppføring"):
-                        ny_liste = [x for x in last_liste(LOGG_FIL) if x.get("id") != e.get("id")]
-                        lagre_liste(LOGG_FIL, ny_liste)
+                        ny_liste = [x for x in gs_last_liste("logg", LOGG_FIL) if x.get("id") != e.get("id")]
+                        gs_lagre_liste("logg", LOGG_FIL, ny_liste, LOGG_HDR)
                         st.toast("Oppføring slettet", icon="🗑️"); st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1081,7 +1202,7 @@ elif side == "⚙️ Administrasjon":
                 vev=["🟢 Veinett åpent","🟡 Lokale stengninger","🔴 Kritiske brudd / Isolerte bygder"]
                 nve=st.selectbox("Vei",vev,index=vev.index(d['vei']))
             if st.button("💾 Lagre beredskapsstatus", type="primary"):
-                lagre_json(FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"logg":nlog,"ekom":ne,"vei":nve})
+                gs_lagre_json("beredskap",FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"logg":nlog,"ekom":ne,"vei":nve})
                 st.toast("✅ Lagret!",icon="💾"); st.rerun()
 
         # ── Tab 2: Vaktinstruks ──────────────────────────────────────────────
@@ -1107,13 +1228,13 @@ elif side == "⚙️ Administrasjon":
             vba,vbb=st.columns(2)
             with vba:
                 if st.button("💾 Lagre vaktinstruks",type="primary",use_container_width=True):
-                    lagre_json(VAKTPLAN_FIL,{"aktiv":va,"skjul_forside":vskjul,"sted":vs,"lagleder":vl,
+                    gs_lagre_json("vaktplan",VAKTPLAN_FIL,{"aktiv":va,"skjul_forside":vskjul,"sted":vs,"lagleder":vl,
                         "talegruppe":vtg,"legevakt":vlv,"sykehus":vsh,"tid_fra":vtf,"tid_til":vtt,
                         "mannskaper":vm,"utstyr":vu,"notat":vn})
                     st.toast("✅ Lagret!",icon="📋"); st.rerun()
             with vbb:
                 if st.button("🗑️ Nullstill instruks",use_container_width=True):
-                    lagre_json(VAKTPLAN_FIL,dict(VP_DEFAULTS))
+                    gs_lagre_json("vaktplan",VAKTPLAN_FIL,dict(VP_DEFAULTS))
                     st.toast("🗑️ Nullstilt",icon="🗑️"); st.rerun()
 
         # ── Tab 3: Avvik ─────────────────────────────────────────────────────
@@ -1150,8 +1271,8 @@ elif side == "⚙️ Administrasjon":
                                 avvik_liste[i]["fulgt_opp"]=False; endret=True
                         with da2:
                             if st.button("🗑️ Slett",key=f"as_{i}",use_container_width=True):
-                                avvik_liste.pop(i); lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
-                if endret: lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
+                                avvik_liste.pop(i); gs_lagre_liste("avvik",AVVIK_FIL,avvik_liste,AVVIK_HDR); st.rerun()
+                if endret: gs_lagre_liste("avvik",AVVIK_FIL,avvik_liste,AVVIK_HDR); st.rerun()
 
         # ── Tab 4: Deltakelser ───────────────────────────────────────────────
         with adm_tabs[3]:
@@ -1176,7 +1297,7 @@ elif side == "⚙️ Administrasjon":
             ec1,ec2=st.columns(2)
             with ec1:
                 if st.button("💾 Lagre e-postkonfig",use_container_width=True):
-                    lagre_json(EPOST_CONFIG_FIL,{"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,
+                    gs_lagre_json("epost_config",EPOST_CONFIG_FIL,{"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,
                                                   "smtp_passord":epas,"fra":efra,"til":etil})
                     st.toast("✅ Lagret!",icon="📧"); st.rerun()
             with ec2:
