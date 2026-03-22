@@ -2,10 +2,8 @@ import streamlit as st
 import streamlit.components.v1 as components
 import requests
 import pandas as pd
-import os, json, smtplib
+import os, json
 from datetime import datetime, timedelta
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 try:
     import gspread
@@ -54,7 +52,6 @@ AVVIK_FIL        = "avvik_data.json"
 VAKTPLAN_FIL     = "vaktplan_data.json"
 SKADE_FIL        = "skade_data.json"
 LOGG_FIL         = "logg_data.json"
-EPOST_CONFIG_FIL = "epost_config.json"
 VEDLEGG_MAPPE    = "vedlegg"
 
 # ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
@@ -177,8 +174,6 @@ DEFAULTS = {"status":"🟢 Normal Beredskap","beskjed":"Klar til innsats i Melhu
             "logg":"","ekom":"🟢 Normal drift","vei":"🟢 Veinett åpent"}
 VP_DEFAULTS = {"sted":"","lagleder":"","mannskaper":"","utstyr":"","legevakt":"",
                "sykehus":"","talegruppe":"","tid_fra":"","tid_til":"","notat":"","aktiv":False,"skjul_forside":False}
-EP_DEFAULTS = {"smtp_server":"","smtp_port":"587","smtp_bruker":"","smtp_passord":"",
-               "fra":"","til":"andreas.narstad@gmail.com"}
 
 # ── DATAFUNKSJONER ───────────────────────────────────────────────────────────
 
@@ -209,30 +204,6 @@ def beregn_rig(tid):
 
 # ── E-POST ───────────────────────────────────────────────────────────────────
 
-def send_avvik_epost(avvik, cfg=None):
-    try:
-        import resend as _resend
-        _resend.api_key = st.secrets["resend"]["api_key"]
-        haster = avvik.get("umiddelbar_oppfolging", False)
-        til = "andreas.narstad@gmail.com"
-        tekst = (
-            f"Tidspunkt : {avvik['registrert']}\n"
-            f"Navn      : {avvik['navn']}\n"
-            f"E-post    : {avvik.get('epost') or '–'}\n"
-            f"Haster    : {'⚡ JA' if haster else 'Nei'}\n\n"
-            f"HENDELSE:\n{avvik['hendelse']}\n\n"
-            f"KONSEKVENS:\n{avvik.get('konsekvens') or '–'}\n\n"
-            f"---\nNF Operativ Tavle – Melhus & Orkland"
-        )
-        _resend.Emails.send({
-            "from": "NF Beredskap <onboarding@resend.dev>",
-            "to": [til],
-            "subject": f"{'⚡ AKUTT – ' if haster else ''}Avvik – NF Melhus/Orkland",
-            "text": tekst,
-        })
-        return True, f"E-post sendt til {til}"
-    except Exception as e:
-        return False, f"E-postfeil: {e}"
 
 # ── API ───────────────────────────────────────────────────────────────────────
 
@@ -463,7 +434,6 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 d            = gs_last_json("beredskap",    FIL,              DEFAULTS)
 vp           = gs_last_json("vaktplan",     VAKTPLAN_FIL,     VP_DEFAULTS)
-epost_cfg    = gs_last_json("epost_config", EPOST_CONFIG_FIL, EP_DEFAULTS)
 avvik_liste  = gs_last_liste("avvik",   AVVIK_FIL)
 del_liste    = gs_last_liste("deltakelse", DELTAKELSE_FIL)
 skade_liste  = gs_last_liste("skade",   SKADE_FIL)
@@ -728,9 +698,6 @@ elif side == "⚠️ Registrer avvik":
                 gs_append("avvik",AVVIK_FIL,nytt,AVVIK_HDR)
                 if av_umiddelbar: st.warning("⚡ Avvik registrert – merket som akutt!")
                 else: st.success("✅ Avvik registrert. Takk for tilbakemeldingen.")
-                ok,mel=send_avvik_epost(nytt,epost_cfg)
-                if ok: st.caption(f"📧 {mel}")
-                elif epost_cfg.get("smtp_server"): st.caption(f"⚠️ {mel}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: SKADEREGISTRERING
@@ -1183,7 +1150,7 @@ elif side == "⚙️ Administrasjon":
             if st.button("🔒 Logg ut"): st.session_state["admin_ok"]=False; st.rerun()
         st.write("")
 
-        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser","📧 E-post"])
+        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
 
         # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
         with adm_tabs[0]:
@@ -1288,27 +1255,3 @@ elif side == "⚙️ Administrasjon":
             else:
                 st.info("Ingen deltakelser registrert ennå.")
 
-        # ── Tab 5: E-post ────────────────────────────────────────────────────
-        with adm_tabs[4]:
-            ep1,ep2=st.columns(2)
-            with ep1:
-                esrv=st.text_input("SMTP-server",value=epost_cfg.get("smtp_server",""),placeholder="smtp.gmail.com")
-                eprt=st.text_input("Port",value=epost_cfg.get("smtp_port","587"))
-                ebrk=st.text_input("SMTP-bruker",value=epost_cfg.get("smtp_bruker",""))
-            with ep2:
-                epas=st.text_input("SMTP-passord",value=epost_cfg.get("smtp_passord",""),type="password")
-                efra=st.text_input("Fra-adresse",value=epost_cfg.get("fra",""))
-                etil=st.text_input("Send til",value=epost_cfg.get("til",""))
-            ec1,ec2=st.columns(2)
-            with ec1:
-                if st.button("💾 Lagre e-postkonfig",use_container_width=True):
-                    gs_lagre_json("epost_config",EPOST_CONFIG_FIL,{"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,
-                                                  "smtp_passord":epas,"fra":efra,"til":etil})
-                    st.toast("✅ Lagret!",icon="📧"); st.rerun()
-            with ec2:
-                if st.button("📤 Send testmelding",use_container_width=True):
-                    ok,m=send_avvik_epost({"registrert":datetime.now().strftime('%d.%m.%Y %H:%M'),"navn":"Test",
-                                           "epost":"","hendelse":"Testmelding.","konsekvens":"","umiddelbar_oppfolging":False},
-                                          {"smtp_server":esrv,"smtp_port":eprt,"smtp_bruker":ebrk,
-                                           "smtp_passord":epas,"fra":efra,"til":etil})
-                    st.success(f"✅ {m}") if ok else st.error(m)
