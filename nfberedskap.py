@@ -46,6 +46,7 @@ DELTAKELSE_FIL   = "deltakelse_data.json"
 AVVIK_FIL        = "avvik_data.json"
 VAKTPLAN_FIL     = "vaktplan_data.json"
 SKADE_FIL        = "skade_data.json"
+LOGG_FIL         = "logg_data.json"
 EPOST_CONFIG_FIL = "epost_config.json"
 VEDLEGG_MAPPE    = "vedlegg"
 
@@ -274,6 +275,7 @@ epost_cfg    = last_json(EPOST_CONFIG_FIL, EP_DEFAULTS)
 avvik_liste  = last_liste(AVVIK_FIL)
 del_liste    = last_liste(DELTAKELSE_FIL)
 skade_liste  = last_liste(SKADE_FIL)
+logg_liste   = last_liste(LOGG_FIL)
 akutte       = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get("fulgt_opp")]
 
 # ── SIDEMENY ──────────────────────────────────────────────────────────────────
@@ -294,6 +296,7 @@ with st.sidebar:
         "👤 Registrer deltakelse",
         "⚠️ Registrer avvik",
         "🩹 Skaderegistrering",
+        "📝 Loggføring",
         "📋 Vaktinstruks",
         "💰 Kalkyle – Sanitetsvakt"
     ], label_visibility="collapsed")
@@ -686,6 +689,134 @@ elif side == "🩹 Skaderegistrering":
                     if s.get('merknad'):    st.info(f"📝 {s['merknad']}")
     else:
         st.caption("Ingen skader registrert ennå.")
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: LOGGFØRING
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "📝 Loggføring":
+
+    # ── GRADERING-KONFIG ──
+    GRADERING = {
+        "frigjort":         {"label":"📢 Frigjort til media",     "farge":"#28a745","bg":"rgba(40,167,69,0.12)", "ikon":"📢"},
+        "intern_offentlig": {"label":"🔓 Intern – offentlig",     "farge":"#2196f3","bg":"rgba(33,150,243,0.10)","ikon":"🔓"},
+        "intern_ikke_off":  {"label":"🔒 Intern – ikke offentlig","farge":"#cc0000","bg":"rgba(200,0,0,0.07)",   "ikon":"🔒"},
+    }
+
+    # ── KOMMUNIKASJONSANSVARLIG-MODUS ──
+    if st.session_state.get("komm_modus"):
+        st.markdown("""<div style='background:#1a1a2e;color:#e0e0e0;padding:18px 24px;
+        border-radius:12px;margin-bottom:18px;display:flex;justify-content:space-between;
+        align-items:center;'><span style='font-size:1.3rem;font-weight:bold;'>
+        📡 Kommunikasjonsansvarlig – Frigjort informasjon</span></div>""",
+        unsafe_allow_html=True)
+        if st.button("← Tilbake til logg"):
+            st.session_state["komm_modus"] = False; st.rerun()
+        frigjorte = [e for e in logg_liste if e.get("gradering") == "frigjort"]
+        if not frigjorte:
+            st.info("Ingen informasjon er frigitt til media ennå.")
+        else:
+            st.caption(f"{len(frigjorte)} melding(er) frigitt til media")
+            for e in reversed(frigjorte):
+                st.markdown(f"""<div style='border-left:5px solid #28a745;
+                background:rgba(40,167,69,0.07);border-radius:8px;
+                padding:14px 18px;margin-bottom:10px;'>
+                <div style='font-size:0.78rem;opacity:0.6;margin-bottom:6px;'>
+                📅 {e.get('tidspunkt','')}
+                {f" · ✍️ {e.get('forfatter','')}" if e.get('forfatter') else ''}
+                </div>
+                <div style='font-size:1rem;line-height:1.6;'>{e.get('tekst','')}</div>
+                </div>""", unsafe_allow_html=True)
+        st.stop()
+
+    # ── NORMAL LOGG-MODUS ──
+    st.markdown("<h2>📝 Loggføring</h2>", unsafe_allow_html=True)
+
+    # Kommunikasjonsansvarlig-knapp
+    kk1, kk2 = st.columns([3,1])
+    with kk2:
+        if st.button("📡 Kommunikasjonsansvarlig", use_container_width=True, type="secondary"):
+            st.session_state["komm_modus"] = True; st.rerun()
+
+    st.write("")
+
+    # ── NY LOGGOPPFØRING ──
+    with st.form("logg_form", clear_on_submit=True):
+        lf_forfatter = st.text_input("Ditt navn", placeholder="Ola Nordmann")
+        lf_tekst     = st.text_area("Loggmelding *", placeholder="Beskriv hendelsen, statusoppdatering, tiltak...", height=110)
+
+        # Visuell graderingsvelger
+        st.markdown("<div style='font-size:0.82rem;opacity:0.6;text-transform:uppercase;"
+                    "letter-spacing:0.05em;margin-bottom:8px;'>Gradering</div>", unsafe_allow_html=True)
+        lf_grad = st.radio(
+            "Gradering",
+            options=["frigjort", "intern_offentlig", "intern_ikke_off"],
+            format_func=lambda k: GRADERING[k]["label"],
+            index=1,
+            horizontal=True,
+            label_visibility="collapsed"
+        )
+
+        # Farget forhåndsvisning av valgt gradering
+        g = GRADERING[lf_grad]
+        st.markdown(f"""<div style='border-left:4px solid {g["farge"]};background:{g["bg"]};
+        border-radius:6px;padding:8px 14px;margin-top:6px;font-size:0.9rem;'>
+        {g["ikon"]} <b>{g["label"]}</b>
+        {"– Synlig for kommunikasjonsansvarlig og media." if lf_grad=="frigjort"
+         else "– Synlig internt for alle." if lf_grad=="intern_offentlig"
+         else "– Kun synlig for innloggede administratorer."}
+        </div>""", unsafe_allow_html=True)
+
+        if st.form_submit_button("💾 Lagre loggoppføring", use_container_width=True, type="primary"):
+            if not lf_tekst.strip():
+                st.error("Loggmeldingen kan ikke være tom.")
+            else:
+                ny = {"id": datetime.now().strftime('%Y%m%d%H%M%S%f'),
+                      "tidspunkt": datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+                      "forfatter": lf_forfatter.strip(),
+                      "tekst": lf_tekst.strip(),
+                      "gradering": lf_grad}
+                liste = last_liste(LOGG_FIL); liste.append(ny); lagre_liste(LOGG_FIL, liste)
+                logg_liste = liste
+                st.success(f"✅ Loggoppføring lagret ({GRADERING[lf_grad]['label']})")
+
+    # ── VISNING AV LOGG ──
+    st.write("---")
+    fresh_logg = last_liste(LOGG_FIL)
+    if not fresh_logg:
+        st.caption("Loggen er tom.")
+    else:
+        er_admin = st.session_state.get("admin_ok", False)
+        st.subheader(f"📋 Logg ({len(fresh_logg)} oppføringer)")
+
+        # Filter
+        vis_grad = st.multiselect(
+            "Filtrer gradering",
+            options=["frigjort","intern_offentlig","intern_ikke_off"],
+            default=["frigjort","intern_offentlig"] if not er_admin else ["frigjort","intern_offentlig","intern_ikke_off"],
+            format_func=lambda k: GRADERING[k]["label"]
+        )
+
+        for e in reversed(fresh_logg):
+            grad = e.get("gradering","intern_offentlig")
+            if grad not in vis_grad: continue
+            # Skjul låste oppføringer for ikke-admins
+            if grad == "intern_ikke_off" and not er_admin:
+                st.markdown(f"""<div style='border-left:4px solid #999;background:rgba(128,128,128,0.06);
+                border-radius:8px;padding:10px 16px;margin-bottom:8px;opacity:0.5;'>
+                🔒 <em>Intern melding – kun for administratorer</em>
+                <span style='float:right;font-size:0.78rem;'>{e.get('tidspunkt','')}</span>
+                </div>""", unsafe_allow_html=True)
+                continue
+            g = GRADERING.get(grad, GRADERING["intern_offentlig"])
+            st.markdown(f"""<div style='border-left:5px solid {g["farge"]};background:{g["bg"]};
+            border-radius:8px;padding:12px 18px;margin-bottom:10px;'>
+            <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;'>
+            <span style='font-size:0.8rem;font-weight:bold;color:{g["farge"]};'>{g["ikon"]} {g["label"]}</span>
+            <span style='font-size:0.78rem;opacity:0.55;'>{e.get('tidspunkt','')}
+            {f" · {e.get('forfatter','')}" if e.get('forfatter') else ''}</span>
+            </div>
+            <div style='font-size:0.97rem;line-height:1.65;'>{e.get('tekst','')}</div>
+            </div>""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: VAKTINSTRUKS
