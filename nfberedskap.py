@@ -176,6 +176,66 @@ def hent_lokal_vaer():
         return now['air_temperature'],now['wind_speed'],prog
     except: return None,None,[]
 
+# Kommuner i Melhus/Orkland-regionen vi filtrerer på
+_TENSIO_KOMMUNER = ["melhus","orkland","midtre gauldal","skaun","trondheim","malvik",
+                    "klæbu","rissa","ørland","bjugn","agdenes","snillfjord","hitra","frøya"]
+
+@st.cache_data(ttl=120)
+def hent_tensio_brudd():
+    """
+    Henter pågående (lag 0=punkt) og planlagte (lag 2=punkt) strømbrudd
+    fra Tensio Nord sitt offentlige ArcGIS FeatureServer.
+    Returnerer (pagaende, planlagte) – lister av dicts.
+    """
+    BASE = "https://kart.tensio.no/enterprise/rest/services/Hosted"
+    PARAMS = "where=1%3D1&outFields=*&returnGeometry=false&f=geojson"
+    pagaende=[]; planlagte=[]
+    try:
+        # Pågående punkt – TN
+        r=requests.get(f"{BASE}/StromstansTN/FeatureServer/0/query?{PARAMS}",
+                       headers=STD_HEADERS,timeout=10)
+        r.raise_for_status()
+        for feat in r.json().get("features",[]):
+            p=feat.get("properties",{})
+            kom=(p.get("municipal_txt") or "").lower()
+            if not any(k in kom for k in _TENSIO_KOMMUNER): continue
+            start_ms=p.get("starttime")
+            start_str=""
+            if start_ms:
+                try: start_str=datetime.fromtimestamp(int(start_ms)/1000).strftime("%d.%m %H:%M")
+                except: pass
+            pagaende.append({
+                "kommune":   p.get("municipal_txt","–"),
+                "antall":    p.get("num_ab",0) or 0,
+                "start":     start_str,
+                "arsak":     p.get("reason_txt","") or p.get("type_txt","") or "Ukjent",
+                "info":      p.get("customer_web_text","") or "",
+                "oppdatert": p.get("last_updated",""),
+            })
+        # Planlagte punkt – TN (lag 2)
+        r2=requests.get(f"{BASE}/StromstansTN/FeatureServer/2/query?{PARAMS}",
+                        headers=STD_HEADERS,timeout=10)
+        r2.raise_for_status()
+        for feat in r2.json().get("features",[]):
+            p=feat.get("properties",{})
+            kom=(p.get("municipal_txt") or "").lower()
+            if not any(k in kom for k in _TENSIO_KOMMUNER): continue
+            start_ms=p.get("starttime")
+            start_str=""
+            if start_ms:
+                try: start_str=datetime.fromtimestamp(int(start_ms)/1000).strftime("%d.%m %H:%M")
+                except: pass
+            planlagte.append({
+                "kommune":   p.get("municipal_txt","–"),
+                "antall":    p.get("num_ab",0) or 0,
+                "start":     start_str,
+                "arsak":     p.get("reason_txt","") or p.get("type_txt","") or "Planlagt",
+                "info":      p.get("customer_web_text","") or "",
+            })
+    except Exception as e:
+        pass
+    return pagaende, planlagte
+
 # ── HTML-EKSPORT ─────────────────────────────────────────────────────────────
 
 def generer_beredskapsplan(vp,d):
@@ -242,6 +302,11 @@ th:last-child{{text-align:right}}td{{padding:10px 14px;border-bottom:1px solid #
 
 CSS = """
 <style>
+/* Skjul Streamlits automatiske sidenavigasjon */
+[data-testid="stSidebarNav"] {display: none !important;}
+[data-testid="stSidebarNavItems"] {display: none !important;}
+[data-testid="stSidebarNavSeparator"] {display: none !important;}
+
 .nf-card      {background:rgba(128,128,128,0.07);border:1px solid rgba(128,128,128,0.2);border-radius:12px;padding:15px;}
 .nf-card-blue {background:rgba(46,89,132,0.08);border:2px solid #2e5984;border-radius:12px;padding:15px;min-height:160px;}
 .nf-danger    {background:rgba(220,53,69,0.10);border:1px solid #dc3545;border-radius:10px;padding:14px;margin-top:10px;}
@@ -369,6 +434,42 @@ if side == "🏠 Operativ tavle":
         st.markdown(f"<div class='nf-infra {ic}'><b>📡 Kritisk Infrastruktur:</b><br><br>"
                     f"<b>EKOM:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['ekom']}</span><br><br>"
                     f"<b>VEI / ISOLASJON:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['vei']}</span></div>", unsafe_allow_html=True)
+
+    # ── TENSIO STRØMBRUDD ────────────────────────────────────────────────────
+    pagaende_brudd, planlagte_brudd = hent_tensio_brudd()
+    tot_berort = sum(b["antall"] for b in pagaende_brudd)
+
+    if pagaende_brudd or planlagte_brudd:
+        st.write("")
+        if pagaende_brudd:
+            brd_farge="#dc3545"; brd_bg="rgba(220,53,69,0.08)"; brd_ikon="⚡"
+            brd_tittel=f"Strømbrudd – {len(pagaende_brudd)} pågående ({tot_berort:,} berørte kunder)".replace(","," ")
+        else:
+            brd_farge="#ffc107"; brd_bg="rgba(255,193,7,0.08)"; brd_ikon="🔧"
+            brd_tittel=f"Planlagte utkoblinger – {len(planlagte_brudd)} stk"
+        st.markdown(f"<div style='border-left:5px solid {brd_farge};background:{brd_bg};"
+                    f"border-radius:10px;padding:14px 18px;'>",unsafe_allow_html=True)
+        st.markdown(f"<b style='font-size:1.05rem;color:{brd_farge};'>{brd_ikon} Tensio – {brd_tittel}</b>",
+                    unsafe_allow_html=True)
+        tcols = st.columns(min(len(pagaende_brudd or planlagte_brudd), 4))
+        for i, b in enumerate(pagaende_brudd or planlagte_brudd):
+            with tcols[i % 4]:
+                st.markdown(f"""<div style='background:rgba(128,128,128,0.08);border-radius:8px;
+                padding:10px 12px;margin-top:8px;'>
+                <div style='font-weight:bold;font-size:0.95rem;'>{b['kommune']}</div>
+                <div style='font-size:0.85rem;opacity:0.8;'>{b['arsak']}</div>
+                <div style='font-size:0.8rem;opacity:0.6;'>▶ {b['start']}</div>
+                <div style='font-size:1rem;font-weight:bold;color:{brd_farge};margin-top:4px;'>
+                👥 {b['antall']} kunder</div>
+                {f"<div style='font-size:0.78rem;opacity:0.6;margin-top:4px;'>{b['info'][:80]}...</div>" if b.get('info') and len(b['info'])>10 else ""}
+                </div>""",unsafe_allow_html=True)
+        st.markdown("</div>",unsafe_allow_html=True)
+    else:
+        st.markdown("""<div style='border-left:5px solid #28a745;background:rgba(40,167,69,0.07);
+        border-radius:10px;padding:11px 18px;margin-top:8px;'>
+        <span style='color:#28a745;font-weight:bold;'>⚡ Tensio – Ingen registrerte strømbrudd i regionen</span>
+        <span style='opacity:0.5;font-size:0.8rem;'> · Oppdateres hvert 2. min</span>
+        </div>""",unsafe_allow_html=True)
 
     # Kart og varsler
     st.write("---")
@@ -695,128 +796,209 @@ elif side == "🩹 Skaderegistrering":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "📝 Loggføring":
 
-    # ── GRADERING-KONFIG ──
     GRADERING = {
-        "frigjort":         {"label":"📢 Frigjort til media",     "farge":"#28a745","bg":"rgba(40,167,69,0.12)", "ikon":"📢"},
-        "intern_offentlig": {"label":"🔓 Intern – offentlig",     "farge":"#2196f3","bg":"rgba(33,150,243,0.10)","ikon":"🔓"},
-        "intern_ikke_off":  {"label":"🔒 Intern – ikke offentlig","farge":"#cc0000","bg":"rgba(200,0,0,0.07)",   "ikon":"🔒"},
+        "frigjort":         {"label":"Frigjort til media",      "farge":"#28a745","bg":"rgba(40,167,69,0.12)", "ikon":"📢","kort":"MEDIA"},
+        "intern_offentlig": {"label":"Intern – offentlig",      "farge":"#2196f3","bg":"rgba(33,150,243,0.10)","ikon":"🔓","kort":"INTERN"},
+        "intern_ikke_off":  {"label":"Intern – ikke offentlig", "farge":"#cc0000","bg":"rgba(200,0,0,0.08)",   "ikon":"🔒","kort":"LÅST"},
     }
+    er_admin = st.session_state.get("admin_ok", False)
 
-    # ── KOMMUNIKASJONSANSVARLIG-MODUS ──
+    # ── KOMMUNIKASJONSANSVARLIG-MODUS ─────────────────────────────────────────
     if st.session_state.get("komm_modus"):
-        st.markdown("""<div style='background:#1a1a2e;color:#e0e0e0;padding:18px 24px;
-        border-radius:12px;margin-bottom:18px;display:flex;justify-content:space-between;
-        align-items:center;'><span style='font-size:1.3rem;font-weight:bold;'>
-        📡 Kommunikasjonsansvarlig – Frigjort informasjon</span></div>""",
-        unsafe_allow_html=True)
-        if st.button("← Tilbake til logg"):
+        st.markdown(f"""<div style='background:linear-gradient(135deg,#1a3a1a,#0d2b0d);
+        color:white;padding:20px 28px;border-radius:14px;margin-bottom:20px;
+        border:2px solid #28a745;'>
+        <div style='font-size:1.4rem;font-weight:bold;'>📡 Kommunikasjonsansvarlig</div>
+        <div style='opacity:0.7;margin-top:4px;font-size:0.9rem;'>
+        Viser kun informasjon frigitt til media · {d['status']}</div>
+        </div>""", unsafe_allow_html=True)
+        if st.button("← Tilbake til logg", key="komm_tilbake"):
             st.session_state["komm_modus"] = False; st.rerun()
-        frigjorte = [e for e in logg_liste if e.get("gradering") == "frigjort"]
+        st.write("")
+        fresh = last_liste(LOGG_FIL)
+        frigjorte = [e for e in fresh if e.get("gradering") == "frigjort"]
         if not frigjorte:
-            st.info("Ingen informasjon er frigitt til media ennå.")
+            st.markdown("""<div style='text-align:center;padding:60px 20px;opacity:0.5;'>
+            <div style='font-size:3rem;'>📭</div>
+            <div style='margin-top:12px;font-size:1.1rem;'>Ingen informasjon er frigitt til media ennå</div>
+            </div>""", unsafe_allow_html=True)
         else:
-            st.caption(f"{len(frigjorte)} melding(er) frigitt til media")
+            st.caption(f"📢 {len(frigjorte)} melding(er) frigitt til media")
             for e in reversed(frigjorte):
                 st.markdown(f"""<div style='border-left:5px solid #28a745;
-                background:rgba(40,167,69,0.07);border-radius:8px;
-                padding:14px 18px;margin-bottom:10px;'>
-                <div style='font-size:0.78rem;opacity:0.6;margin-bottom:6px;'>
-                📅 {e.get('tidspunkt','')}
-                {f" · ✍️ {e.get('forfatter','')}" if e.get('forfatter') else ''}
+                background:rgba(40,167,69,0.08);border-radius:10px;
+                padding:16px 20px;margin-bottom:12px;'>
+                <div style='font-size:0.78rem;color:#28a745;font-weight:bold;
+                margin-bottom:8px;letter-spacing:0.05em;'>
+                📢 FRIGITT TIL MEDIA &nbsp;·&nbsp; {e.get('tidspunkt','')}
+                {f" &nbsp;·&nbsp; ✍️ {e.get('forfatter','')}" if e.get('forfatter') else ''}
                 </div>
-                <div style='font-size:1rem;line-height:1.6;'>{e.get('tekst','')}</div>
+                <div style='font-size:1.05rem;line-height:1.7;'>{e.get('tekst','')}</div>
                 </div>""", unsafe_allow_html=True)
         st.stop()
 
-    # ── NORMAL LOGG-MODUS ──
-    st.markdown("<h2>📝 Loggføring</h2>", unsafe_allow_html=True)
-
-    # Kommunikasjonsansvarlig-knapp
-    kk1, kk2 = st.columns([3,1])
-    with kk2:
-        if st.button("📡 Kommunikasjonsansvarlig", use_container_width=True, type="secondary"):
+    # ── HEADER + KOMMUNIKASJONSKNAPP ─────────────────────────────────────────
+    hc1, hc2 = st.columns([3,1])
+    with hc1:
+        st.markdown("<h2 style='margin-bottom:0'>📝 Operativ logg</h2>", unsafe_allow_html=True)
+    with hc2:
+        st.write("")
+        if st.button("📡 Kommunikasjonsansvarlig", use_container_width=True):
             st.session_state["komm_modus"] = True; st.rerun()
 
+    # ── STATISTIKKBAR ─────────────────────────────────────────────────────────
+    fresh_logg = last_liste(LOGG_FIL)
+    n_media  = sum(1 for e in fresh_logg if e.get("gradering")=="frigjort")
+    n_intern = sum(1 for e in fresh_logg if e.get("gradering")=="intern_offentlig")
+    n_laaст  = sum(1 for e in fresh_logg if e.get("gradering")=="intern_ikke_off")
+    s1,s2,s3,s4 = st.columns(4)
+    s1.metric("Totalt", len(fresh_logg))
+    s2.metric("📢 Media", n_media)
+    s3.metric("🔓 Intern", n_intern)
+    s4.metric("🔒 Låst", n_laaст if er_admin else "–")
     st.write("")
 
-    # ── NY LOGGOPPFØRING ──
-    with st.form("logg_form", clear_on_submit=True):
-        lf_forfatter = st.text_input("Ditt navn", placeholder="Ola Nordmann")
-        lf_tekst     = st.text_area("Loggmelding *", placeholder="Beskriv hendelsen, statusoppdatering, tiltak...", height=110)
-
-        # Visuell graderingsvelger
-        st.markdown("<div style='font-size:0.82rem;opacity:0.6;text-transform:uppercase;"
-                    "letter-spacing:0.05em;margin-bottom:8px;'>Gradering</div>", unsafe_allow_html=True)
-        lf_grad = st.radio(
-            "Gradering",
-            options=["frigjort", "intern_offentlig", "intern_ikke_off"],
-            format_func=lambda k: GRADERING[k]["label"],
-            index=1,
-            horizontal=True,
-            label_visibility="collapsed"
-        )
-
-        # Farget forhåndsvisning av valgt gradering
-        g = GRADERING[lf_grad]
-        st.markdown(f"""<div style='border-left:4px solid {g["farge"]};background:{g["bg"]};
-        border-radius:6px;padding:8px 14px;margin-top:6px;font-size:0.9rem;'>
-        {g["ikon"]} <b>{g["label"]}</b>
-        {"– Synlig for kommunikasjonsansvarlig og media." if lf_grad=="frigjort"
-         else "– Synlig internt for alle." if lf_grad=="intern_offentlig"
-         else "– Kun synlig for innloggede administratorer."}
+    # ── NY LOGGOPPFØRING (kun admin) ──────────────────────────────────────────
+    if not er_admin:
+        st.markdown("""<div style='border:2px dashed rgba(128,128,128,0.3);border-radius:12px;
+        padding:28px;text-align:center;opacity:0.6;margin-bottom:20px;'>
+        <div style='font-size:2rem;'>🔒</div>
+        <div style='margin-top:8px;font-weight:bold;'>Loggføring krever innlogging</div>
+        <div style='font-size:0.85rem;margin-top:4px;'>Logg inn via ⚙️ Administrasjon på operativ tavle</div>
         </div>""", unsafe_allow_html=True)
+    else:
+        with st.form("logg_form", clear_on_submit=True):
+            lc1, lc2 = st.columns([2,1])
+            with lc1:
+                lf_tekst = st.text_area("Loggmelding *",
+                    placeholder="Beskriv hendelsen, statusoppdatering, tiltak iverksatt...",
+                    height=120, label_visibility="collapsed")
+            with lc2:
+                lf_forfatter = st.text_input("Ditt navn", placeholder="Ola Nordmann")
+                st.markdown("<div style='font-size:0.78rem;opacity:0.55;text-transform:uppercase;"
+                            "letter-spacing:0.05em;margin:10px 0 6px;'>Gradering</div>",
+                            unsafe_allow_html=True)
+                lf_grad = st.radio("Gradering",
+                    options=["intern_offentlig","frigjort","intern_ikke_off"],
+                    format_func=lambda k: f"{GRADERING[k]['ikon']} {GRADERING[k]['label']}",
+                    index=0, label_visibility="collapsed")
 
-        if st.form_submit_button("💾 Lagre loggoppføring", use_container_width=True, type="primary"):
-            if not lf_tekst.strip():
-                st.error("Loggmeldingen kan ikke være tom.")
-            else:
-                ny = {"id": datetime.now().strftime('%Y%m%d%H%M%S%f'),
-                      "tidspunkt": datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
-                      "forfatter": lf_forfatter.strip(),
-                      "tekst": lf_tekst.strip(),
-                      "gradering": lf_grad}
-                liste = last_liste(LOGG_FIL); liste.append(ny); lagre_liste(LOGG_FIL, liste)
-                logg_liste = liste
-                st.success(f"✅ Loggoppføring lagret ({GRADERING[lf_grad]['label']})")
+            # Farget preview-stripe
+            g = GRADERING[lf_grad]
+            st.markdown(f"""<div style='border-radius:8px;border-left:5px solid {g["farge"]};
+            background:{g["bg"]};padding:9px 16px;margin:4px 0 6px;
+            display:flex;justify-content:space-between;align-items:center;'>
+            <span style='font-weight:bold;color:{g["farge"]};font-size:0.92rem;'>
+            {g["ikon"]} {g["label"]}</span>
+            <span style='font-size:0.8rem;opacity:0.6;'>
+            {"Synlig for media og kommunikasjonsansvarlig" if lf_grad=="frigjort"
+             else "Synlig for alle interne brukere" if lf_grad=="intern_offentlig"
+             else "🔒 Kun synlig for innloggede administratorer"}
+            </span></div>""", unsafe_allow_html=True)
 
-    # ── VISNING AV LOGG ──
+            if st.form_submit_button("💾 Loggfør", use_container_width=True, type="primary"):
+                if not lf_tekst.strip():
+                    st.error("Loggmeldingen kan ikke være tom.")
+                else:
+                    ny = {"id": datetime.now().strftime('%Y%m%d%H%M%S%f'),
+                          "tidspunkt": datetime.now().strftime('%d.%m.%Y %H:%M:%S'),
+                          "forfatter": lf_forfatter.strip() or "Admin",
+                          "tekst": lf_tekst.strip(),
+                          "gradering": lf_grad}
+                    liste = last_liste(LOGG_FIL); liste.append(ny); lagre_liste(LOGG_FIL, liste)
+                    st.toast(f"✅ Logget som {g['ikon']} {g['kort']}", icon="📝"); st.rerun()
+
+    # ── LOGG-TIDSLINJE ────────────────────────────────────────────────────────
     st.write("---")
     fresh_logg = last_liste(LOGG_FIL)
+
     if not fresh_logg:
-        st.caption("Loggen er tom.")
+        st.markdown("""<div style='text-align:center;padding:50px 20px;opacity:0.4;'>
+        <div style='font-size:3rem;'>📋</div>
+        <div style='margin-top:10px;'>Loggen er tom</div></div>""", unsafe_allow_html=True)
     else:
-        er_admin = st.session_state.get("admin_ok", False)
-        st.subheader(f"📋 Logg ({len(fresh_logg)} oppføringer)")
+        # Filterrad
+        fc1, fc2 = st.columns([3,1])
+        with fc1:
+            valg = ["frigjort","intern_offentlig"]
+            if er_admin: valg.append("intern_ikke_off")
+            vis_grad = st.multiselect("Vis", options=valg,
+                default=valg,
+                format_func=lambda k: f"{GRADERING[k]['ikon']} {GRADERING[k]['label']}")
+        with fc2:
+            st.write("")
+            vis_ant = st.selectbox("Antall", [10,25,50,999], format_func=lambda x:"Alle" if x==999 else str(x))
 
-        # Filter
-        vis_grad = st.multiselect(
-            "Filtrer gradering",
-            options=["frigjort","intern_offentlig","intern_ikke_off"],
-            default=["frigjort","intern_offentlig"] if not er_admin else ["frigjort","intern_offentlig","intern_ikke_off"],
-            format_func=lambda k: GRADERING[k]["label"]
-        )
+        filtrert = [e for e in reversed(fresh_logg)
+                    if e.get("gradering","intern_offentlig") in vis_grad
+                    and (er_admin or e.get("gradering") != "intern_ikke_off")][:vis_ant]
 
-        for e in reversed(fresh_logg):
-            grad = e.get("gradering","intern_offentlig")
-            if grad not in vis_grad: continue
-            # Skjul låste oppføringer for ikke-admins
+        if not filtrert:
+            st.caption("Ingen oppføringer matcher filteret.")
+
+        # Tidslinje
+        siste_dato = None
+        for i, e in enumerate(filtrert):
+            grad  = e.get("gradering","intern_offentlig")
+            g     = GRADERING.get(grad, GRADERING["intern_offentlig"])
+            tid   = e.get("tidspunkt","")
+            dato  = tid[:10] if len(tid) >= 10 else tid
+            klokkeslett = tid[11:19] if len(tid) >= 19 else tid[11:]
+
+            # Datoskillelinje
+            if dato != siste_dato:
+                siste_dato = dato
+                st.markdown(f"""<div style='display:flex;align-items:center;
+                gap:12px;margin:18px 0 10px;'>
+                <div style='flex:1;height:1px;background:rgba(128,128,128,0.2);'></div>
+                <span style='font-size:0.78rem;opacity:0.5;font-weight:bold;
+                letter-spacing:0.06em;'>{dato}</span>
+                <div style='flex:1;height:1px;background:rgba(128,128,128,0.2);'></div>
+                </div>""", unsafe_allow_html=True)
+
+            # Låst vises nedtonet for admin, skjult for andre
             if grad == "intern_ikke_off" and not er_admin:
-                st.markdown(f"""<div style='border-left:4px solid #999;background:rgba(128,128,128,0.06);
-                border-radius:8px;padding:10px 16px;margin-bottom:8px;opacity:0.5;'>
-                🔒 <em>Intern melding – kun for administratorer</em>
-                <span style='float:right;font-size:0.78rem;'>{e.get('tidspunkt','')}</span>
+                st.markdown(f"""<div style='border-left:4px solid #777;
+                background:rgba(128,128,128,0.05);border-radius:8px;
+                padding:9px 16px;margin-bottom:6px;opacity:0.4;'>
+                🔒 <em>Intern – ikke offentlig</em>
+                <span style='float:right;font-size:0.75rem;'>{klokkeslett}</span>
                 </div>""", unsafe_allow_html=True)
                 continue
-            g = GRADERING.get(grad, GRADERING["intern_offentlig"])
-            st.markdown(f"""<div style='border-left:5px solid {g["farge"]};background:{g["bg"]};
-            border-radius:8px;padding:12px 18px;margin-bottom:10px;'>
-            <div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;'>
-            <span style='font-size:0.8rem;font-weight:bold;color:{g["farge"]};'>{g["ikon"]} {g["label"]}</span>
-            <span style='font-size:0.78rem;opacity:0.55;'>{e.get('tidspunkt','')}
-            {f" · {e.get('forfatter','')}" if e.get('forfatter') else ''}</span>
-            </div>
-            <div style='font-size:0.97rem;line-height:1.65;'>{e.get('tekst','')}</div>
-            </div>""", unsafe_allow_html=True)
+
+            # Badge-farge for gradering
+            adm_strip = (f"<span style='background:{g['farge']};color:white;font-size:0.68rem;"
+                         f"font-weight:bold;padding:2px 7px;border-radius:4px;letter-spacing:0.05em;"
+                         f"margin-right:8px;'>{g['kort']}</span>")
+
+            # Slette-knapp kun for admin
+            slett_html = ""
+            if er_admin:
+                col_txt, col_del = st.columns([20,1])
+            else:
+                col_txt = st.container()
+
+            with col_txt:
+                st.markdown(f"""<div style='border-left:4px solid {g["farge"]};
+                background:{g["bg"]};border-radius:0 10px 10px 0;
+                padding:13px 18px;margin-bottom:6px;'>
+                <div style='display:flex;justify-content:space-between;
+                align-items:center;margin-bottom:7px;'>
+                <div>{adm_strip}
+                <span style='font-size:0.8rem;opacity:0.7;'>
+                {f"✍️ <b>{e['forfatter']}</b> &nbsp;·&nbsp; " if e.get('forfatter') else ''}
+                🕐 {klokkeslett}</span></div>
+                </div>
+                <div style='font-size:0.97rem;line-height:1.7;white-space:pre-wrap;'>{e.get('tekst','')}</div>
+                </div>""", unsafe_allow_html=True)
+
+            if er_admin:
+                with col_del:
+                    st.write("")
+                    if st.button("🗑️", key=f"del_logg_{e.get('id',i)}", help="Slett oppføring"):
+                        ny_liste = [x for x in last_liste(LOGG_FIL) if x.get("id") != e.get("id")]
+                        lagre_liste(LOGG_FIL, ny_liste)
+                        st.toast("Oppføring slettet", icon="🗑️"); st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: VAKTINSTRUKS
