@@ -623,8 +623,14 @@ if side == "🏠 Operativ tavle":
                             if st.button("✅ Lukk",key=f"lukk_{i}",use_container_width=True):
                                 avvik_liste[i]["fulgt_opp"]=True; avvik_liste[i]["oppfolging_notat"]=notat; endret=True
                     else:
-                        if st.button("↩️ Gjenåpne",key=f"aa_{i}"):
-                            avvik_liste[i]["fulgt_opp"]=False; endret=True
+                        da1,da2=st.columns(2)
+                        with da1:
+                            if st.button("↩️ Gjenåpne",key=f"aa_{i}",use_container_width=True):
+                                avvik_liste[i]["fulgt_opp"]=False; endret=True
+                        with da2:
+                            if st.button("🗑️ Slett",key=f"slett_{i}",use_container_width=True,
+                                         help="Sletter avviket permanent – kun mulig etter lukking"):
+                                avvik_liste.pop(i); lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
                 if endret: lagre_liste(AVVIK_FIL,avvik_liste); st.rerun()
 
             st.markdown("---"); st.write("**📋 Registrerte deltakelser**")
