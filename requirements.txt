@@ -1,7 +1,5 @@
 streamlit
 requests
 pandas
-gspread>=6.0.0
-google-auth>=2.0.0
-[resend]
-api_key = "re_FPx9wR1P_8F8Yh3wWSNiimSDMoV7evhw7"
+gspread
+google-auth
