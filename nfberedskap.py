@@ -45,6 +45,7 @@ FIL              = "beredskap_data.json"
 DELTAKELSE_FIL   = "deltakelse_data.json"
 AVVIK_FIL        = "avvik_data.json"
 VAKTPLAN_FIL     = "vaktplan_data.json"
+SKADE_FIL        = "skade_data.json"
 EPOST_CONFIG_FIL = "epost_config.json"
 VEDLEGG_MAPPE    = "vedlegg"
 
@@ -52,7 +53,7 @@ DEFAULTS = {"status":"🟢 Normal Beredskap","beskjed":"Klar til innsats i Melhu
             "leder":"Ikke satt","vakt":"9XX XX XXX","kort":"Daglig drift",
             "logg":"","ekom":"🟢 Normal drift","vei":"🟢 Veinett åpent"}
 VP_DEFAULTS = {"sted":"","lagleder":"","mannskaper":"","utstyr":"","legevakt":"",
-               "sykehus":"","talegruppe":"","tid_fra":"","tid_til":"","notat":"","aktiv":False}
+               "sykehus":"","talegruppe":"","tid_fra":"","tid_til":"","notat":"","aktiv":False,"skjul_forside":False}
 EP_DEFAULTS = {"smtp_server":"","smtp_port":"587","smtp_bruker":"","smtp_passord":"",
                "fra":"","til":"andreas.narstad@gmail.com"}
 
@@ -272,6 +273,7 @@ vp           = last_json(VAKTPLAN_FIL, VP_DEFAULTS)
 epost_cfg    = last_json(EPOST_CONFIG_FIL, EP_DEFAULTS)
 avvik_liste  = last_liste(AVVIK_FIL)
 del_liste    = last_liste(DELTAKELSE_FIL)
+skade_liste  = last_liste(SKADE_FIL)
 akutte       = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get("fulgt_opp")]
 
 # ── SIDEMENY ──────────────────────────────────────────────────────────────────
@@ -291,6 +293,7 @@ with st.sidebar:
         "🏠 Operativ tavle",
         "👤 Registrer deltakelse",
         "⚠️ Registrer avvik",
+        "🩹 Skaderegistrering",
         "📋 Vaktinstruks",
         "💰 Kalkyle – Sanitetsvakt"
     ], label_visibility="collapsed")
@@ -301,6 +304,7 @@ with st.sidebar:
     m2.metric("Avvik", len(avvik_liste),
               delta=f"{len(akutte)} akutte" if akutte else None,
               delta_color="inverse")
+    st.metric("Skader", len(skade_liste))
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: OPERATIV TAVLE
@@ -391,7 +395,7 @@ if side == "🏠 Operativ tavle":
         st.text_area("", value=d['logg'], height=120, disabled=True, label_visibility="collapsed")
 
     # Vaktinstruks i dashboard
-    if vp.get("aktiv") and (vp.get("sted") or vp.get("lagleder")):
+    if vp.get("aktiv") and not vp.get("skjul_forside") and (vp.get("sted") or vp.get("lagleder")):
         st.write("---"); st.subheader("📋 Instruks for aktivitet/vakt")
         rig = beregn_rig(vp["tid_fra"])
         vi1,vi2,vi3 = st.columns(3)
@@ -455,7 +459,10 @@ if side == "🏠 Operativ tavle":
                 st.toast("✅ Lagret!",icon="💾"); st.rerun()
 
             st.markdown("---"); st.write("**📋 Vaktinstruks**")
-            va=st.checkbox("Aktiver vaktinstruks",value=vp.get("aktiv",False))
+            vchk1, vchk2 = st.columns(2)
+            with vchk1: va=st.checkbox("Aktiver vaktinstruks",value=vp.get("aktiv",False))
+            with vchk2: vskjul=st.checkbox("Skjul på forsiden",value=vp.get("skjul_forside",False),
+                                            help="Instruksen er tilgjengelig via menyen, men vises ikke på operativ tavle.")
             vp1,vp2=st.columns(2)
             with vp1:
                 vs=st.text_input("📍 Sted",value=vp.get("sted",""))
@@ -471,10 +478,17 @@ if side == "🏠 Operativ tavle":
                 vm=st.text_area("👥 Mannskaper",value=vp.get("mannskaper",""),height=100,placeholder="Ett navn per linje")
                 vu=st.text_area("🎒 Utstyr",value=vp.get("utstyr",""),height=100,placeholder="Ett element per linje")
             vn=st.text_area("📝 Notat",value=vp.get("notat",""),height=60)
-            if st.button("💾 Lagre vaktinstruks",type="primary"):
-                lagre_json(VAKTPLAN_FIL,{"aktiv":va,"sted":vs,"lagleder":vl,"talegruppe":vtg,"legevakt":vlv,
-                    "sykehus":vsh,"tid_fra":vtf,"tid_til":vtt,"mannskaper":vm,"utstyr":vu,"notat":vn})
-                st.toast("✅ Lagret!",icon="📋"); st.rerun()
+            vba,vbb=st.columns(2)
+            with vba:
+                if st.button("💾 Lagre vaktinstruks",type="primary",use_container_width=True):
+                    lagre_json(VAKTPLAN_FIL,{"aktiv":va,"skjul_forside":vskjul,"sted":vs,"lagleder":vl,
+                        "talegruppe":vtg,"legevakt":vlv,"sykehus":vsh,"tid_fra":vtf,"tid_til":vtt,
+                        "mannskaper":vm,"utstyr":vu,"notat":vn})
+                    st.toast("✅ Lagret!",icon="📋"); st.rerun()
+            with vbb:
+                if st.button("🗑️ Nullstill instruks",use_container_width=True):
+                    lagre_json(VAKTPLAN_FIL,dict(VP_DEFAULTS))
+                    st.toast("🗑️ Instruks nullstilt",icon="🗑️"); st.rerun()
 
             st.markdown("---")
             åpne=[a for a in avvik_liste if not a.get("fulgt_opp")]
@@ -614,6 +628,66 @@ elif side == "⚠️ Registrer avvik":
                 elif epost_cfg.get("smtp_server"): st.caption(f"⚠️ {mel}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: SKADEREGISTRERING
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "🩹 Skaderegistrering":
+    st.markdown("<h2>🩹 Skaderegistrering</h2>", unsafe_allow_html=True)
+    st.caption("Registrer pasienter behandlet under oppdrag eller sanitetsvakt.")
+
+    with st.form("skade_form", clear_on_submit=True):
+        sf1, sf2 = st.columns(2)
+        with sf1:
+            sk_innsats = st.text_input("Oppdrag / arrangement", placeholder="Sommerstevne 2026")
+            sk_behandler = st.text_input("Behandlerens navn *")
+            sk_kjonn = st.selectbox("Kjønn", ["Ikke oppgitt","Mann","Kvinne","Annet"])
+            sk_alder = st.selectbox("Aldersgruppe", ["Ikke oppgitt","0–12 år","13–17 år","18–30 år","31–50 år","51–65 år","66+ år"])
+            sk_konsultert = st.selectbox("Konsultert / viderehenvist til",
+                ["Ingen","AMK / 113","Legevakt","Lege på stedet","Sykehus","Annet"])
+        with sf2:
+            sk_skadetype = st.multiselect("Skadetype / symptom",
+                ["Sårskade","Brudd / mistanke om brudd","Forstuing / strekk","Hodeskade",
+                 "Bevisstløshet / synkope","Brystsmerter","Pustebesvær","Allergi / anafylaksi",
+                 "Diabetisk episode","Kramper","Varme- / kuldesykdom","Psykisk krise","Annet"])
+            sk_behandling = st.text_area("Behandling gitt", placeholder="Sårskylling, bandasje, RICE...", height=100)
+            sk_rad = st.text_area("Videre råd gitt til pasient", placeholder="Oppsøk lege, hvil, is på...", height=80)
+            sk_utstyr = st.multiselect("Utstyr benyttet",
+                ["Forbindingspakke","Brannskadepakke","Tourniquet","Svelgtube / NPA",
+                 "Oksygen","AED / Hjertestarter","BVM / Bag-maske","Nødpute / båre",
+                 "Halskrage","Splint","Blodtrykksapparat","Pulsoksymeter","Blodsukkerapparat","Annet"])
+        sk_merknad = st.text_area("Merknader", height=60)
+        if st.form_submit_button("💾 Registrer skade", use_container_width=True, type="primary"):
+            if not sk_behandler.strip():
+                st.error("Behandlerens navn er påkrevd.")
+            else:
+                ny = {"registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
+                      "innsats": sk_innsats.strip(), "behandler": sk_behandler.strip(),
+                      "kjonn": sk_kjonn, "alder": sk_alder,
+                      "skadetype": sk_skadetype, "behandling": sk_behandling.strip(),
+                      "rad": sk_rad.strip(), "konsultert": sk_konsultert,
+                      "utstyr": sk_utstyr, "merknad": sk_merknad.strip()}
+                liste = last_liste(SKADE_FIL); liste.append(ny); lagre_liste(SKADE_FIL, liste)
+                st.success(f"✅ Skade registrert av **{sk_behandler.strip()}**")
+
+    st.write("---")
+    fresh_skade = last_liste(SKADE_FIL)
+    if fresh_skade:
+        st.subheader(f"📋 Registrerte skader ({len(fresh_skade)} totalt)")
+        for i, s in enumerate(reversed(fresh_skade)):
+            with st.expander(f"🩹 {s.get('registrert','')}  –  {', '.join(s['skadetype']) if s.get('skadetype') else 'Ukjent skadetype'}  |  {s.get('kjonn','')} {s.get('alder','')}"):
+                c1,c2 = st.columns(2)
+                with c1:
+                    st.markdown(f"**Behandler:** {s.get('behandler','–')}")
+                    st.markdown(f"**Oppdrag:** {s.get('innsats') or '–'}")
+                    st.markdown(f"**Konsultert:** {s.get('konsultert','–')}")
+                    if s.get('utstyr'): st.markdown(f"**Utstyr:** {', '.join(s['utstyr'])}")
+                with c2:
+                    if s.get('behandling'): st.markdown(f"**Behandling:** {s['behandling']}")
+                    if s.get('rad'):        st.markdown(f"**Råd gitt:** {s['rad']}")
+                    if s.get('merknad'):    st.info(f"📝 {s['merknad']}")
+    else:
+        st.caption("Ingen skader registrert ennå.")
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: VAKTINSTRUKS
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "📋 Vaktinstruks":
@@ -655,6 +729,10 @@ elif side == "📋 Vaktinstruks":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "💰 Kalkyle – Sanitetsvakt":
     st.markdown("<h2>💰 Kalkyle – Sanitetsvakt</h2>", unsafe_allow_html=True)
+    if not st.session_state.get("admin_ok"):
+        st.warning("🔒 Kalkylen er kun tilgjengelig for innloggede administratorer.")
+        st.caption("Logg inn via **⚙️ Administrasjon** på operativ tavle.")
+        st.stop()
     st.caption("Fyll inn feltene – totalprisen oppdateres automatisk til høyre.")
 
     venstre, høyre = st.columns([3,2], gap="large")
