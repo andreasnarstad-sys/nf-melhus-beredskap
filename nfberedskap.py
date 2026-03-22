@@ -1178,6 +1178,38 @@ elif side == "⚙️ Administrasjon":
             if st.button("🔒 Logg ut"): st.session_state["admin_ok"]=False; st.rerun()
         st.write("")
 
+        # ── GS DIAGNOSE ─────────────────────────────────────────────────────
+        with st.expander("🔧 Google Sheets diagnose", expanded=True):
+            st.write(f"**gspread installert:** {HAS_GSPREAD}")
+            st.write(f"**Secrets tilgjengelig:** {'gcp_service_account' in st.secrets}")
+            st.write(f"**Spreadsheet ID:** {st.secrets.get('google_sheets', {}).get('spreadsheet_id', 'MANGLER')}")
+            try:
+                sh = _gs_sh()
+                if sh:
+                    st.success(f"✅ Koblet til: **{sh.title}**")
+                    ws_test = _gs_ws("diagnose_test")
+                    if ws_test:
+                        st.success("✅ Kan opprette/lese ark")
+                    else:
+                        st.error("❌ Klarer ikke opprette ark – sjekk deling")
+                else:
+                    st.error("❌ Klarer ikke koble til Google Sheets")
+                    # Vis detaljert feil
+                    try:
+                        import gspread
+                        from google.oauth2.service_account import Credentials as C
+                        creds = C.from_service_account_info(dict(st.secrets["gcp_service_account"]),
+                            scopes=["https://www.googleapis.com/auth/spreadsheets",
+                                    "https://www.googleapis.com/auth/drive"])
+                        gc = gspread.authorize(creds)
+                        gc.open_by_key(st.secrets["google_sheets"]["spreadsheet_id"])
+                        st.success("✅ Direkte test OK")
+                    except Exception as e:
+                        st.error(f"Feilmelding: **{e}**")
+            except Exception as e:
+                st.error(f"Uventet feil: {e}")
+        # ────────────────────────────────────────────────────────────────────
+
         adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser","📧 E-post"])
 
         # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
