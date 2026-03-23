@@ -1034,8 +1034,12 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
         st.markdown("<h2 style='margin-bottom:0'>📝 Operativ logg</h2>", unsafe_allow_html=True)
     with hc2:
         st.write("")
-        if st.button("📡 Kommunikasjonsansvarlig", use_container_width=True):
-            st.session_state["komm_modus"] = True; st.rerun()
+        if st.session_state.get("admin_ok"):
+            if st.button("📡 Kommunikasjonsansvarlig", use_container_width=True, type="primary"):
+                st.session_state["komm_modus"] = True; st.rerun()
+        else:
+            st.button("📡 Kommunikasjonsansvarlig", use_container_width=True, disabled=True,
+                      help="🔒 Krever innlogging som administrator")
 
     # ── STATISTIKKBAR ─────────────────────────────────────────────────────────
     fresh_logg = gs_last_liste("logg", LOGG_FIL)
