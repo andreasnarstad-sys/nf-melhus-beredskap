@@ -1715,9 +1715,12 @@ elif side == "⚙️ Administrasjon":
         # ── Tab 4: Deltakelser ───────────────────────────────────────────────
         with adm_tabs[3]:
             if del_liste:
-                dfd=pd.DataFrame(del_liste)[["registrert","navn","oppdrag","tid_ut","tid_inn","utlegg_kr"]]
-                dfd.columns=["Tidspunkt","Navn","Oppdrag","Tid ut","Tid inn","Utlegg (kr)"]
-                st.dataframe(dfd,use_container_width=True,hide_index=True)
+                _dk={"registrert":"Tidspunkt","navn":"Navn","oppdrag":"Oppdrag","tid_ut":"Tid ut",
+                     "tid_inn":"Tid inn","utlegg_kr":"Utlegg (kr)","privatbil":"Privatbil",
+                     "km_kjort":"Km","regnr":"Reg.nr"}
+                dfd=pd.DataFrame(del_liste)
+                vis=[c for c in _dk if c in dfd.columns]
+                st.dataframe(dfd[vis].rename(columns=_dk),use_container_width=True,hide_index=True)
             else:
                 st.info("Ingen deltakelser registrert ennå.")
 
