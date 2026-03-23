@@ -1214,7 +1214,7 @@ elif side == "⚙️ Administrasjon":
             with st.spinner("Sjekker tilkoblinger..."):
                 # Google Sheets
                 try:
-                    sh = _gs_init()
+                    sh = _gs_sh()
                     gs_ok = sh is not None
                     gs_detalj = sh.title if gs_ok else "Ingen tilkobling"
                 except: gs_ok=False; gs_detalj="Feil"
