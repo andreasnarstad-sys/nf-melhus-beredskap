@@ -1562,6 +1562,9 @@ elif side == "⚙️ Administrasjon":
                 # Tensio
                 tensio_ok = sjekk_api("https://kart.tensio.no/enterprise/rest/services/Hosted/StromstansTN/FeatureServer/0/query?where=1%3D1&outFields=objectid&returnGeometry=false&f=geojson")
 
+                # Politilogg
+                politilogg_ok = sjekk_api("https://www.politiet.no/politiloggen?distrikt=trondelag")
+
                 # Resend
                 try:
                     api_key = st.secrets["resend"]["api_key"]
@@ -1577,7 +1580,8 @@ elif side == "⚙️ Administrasjon":
                 st.markdown(lampe(met_ok,  "MET / Yr API"),    unsafe_allow_html=True)
                 st.markdown(lampe(nve_ok,  "NVE Varsom API"),  unsafe_allow_html=True)
             with s3:
-                st.markdown(lampe(tensio_ok, "Tensio strøm API"), unsafe_allow_html=True)
+                st.markdown(lampe(tensio_ok,     "Tensio strøm API"),   unsafe_allow_html=True)
+                st.markdown(lampe(politilogg_ok, "Politilogg (politiet.no)"), unsafe_allow_html=True)
 
         st.write("")
         adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
