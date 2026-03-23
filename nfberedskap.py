@@ -867,6 +867,51 @@ elif side == "📝 Loggføring":
                 </div>
                 <div style='font-size:1.05rem;line-height:1.7;'>{e.get('tekst','')}</div>
                 </div>""", unsafe_allow_html=True)
+
+        st.write("---")
+        with st.expander("📋 Huskeregel for mediahåndtering", expanded=False):
+            st.markdown("""
+<div style='line-height:1.8;font-size:0.95rem;'>
+
+<div style='display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;'>
+
+<div style='background:rgba(220,53,69,0.08);border:1px solid #dc3545;border-radius:10px;padding:14px;'>
+<div style='font-weight:bold;color:#dc3545;margin-bottom:6px;'>🚔 Politiet eier totalbildet</div>
+<div style='font-size:0.88rem;opacity:0.85;'>Uttal deg kun om <b>din egen innsats</b>: antall mannskaper, utstyr og terrengforhold. Alt om årsak, taktikk og pasient → henvis til politiets innsatsleder.</div>
+</div>
+
+<div style='background:rgba(255,193,7,0.08);border:1px solid #ffc107;border-radius:10px;padding:14px;'>
+<div style='font-weight:bold;color:#b8860b;margin-bottom:6px;'>🚫 Aldri spekuler</div>
+<div style='font-size:0.88rem;opacity:0.85;'>«Tror dere skredet ble utløst av..?» → svar alltid med <b>kalde fakta</b> om arbeidet her og nå. Ingen teorier, ingen antakelser.</div>
+</div>
+
+<div style='background:rgba(33,150,243,0.08);border:1px solid #2196f3;border-radius:10px;padding:14px;'>
+<div style='font-weight:bold;color:#1565c0;margin-bottom:6px;'>🛡️ Skjerm pasient og pårørende</div>
+<div style='font-size:0.88rem;opacity:0.85;'>Bekreft <b>aldri</b> alder, kjønn, relasjoner eller identitet. Kun helse og politi frigir slik informasjon.</div>
+</div>
+
+</div>
+
+<div style='background:rgba(128,128,128,0.06);border-radius:10px;padding:14px;margin-bottom:12px;'>
+<div style='font-weight:bold;margin-bottom:8px;'>🌉 Bruk broen – slik styrer du intervjuet</div>
+<div style='font-size:0.88rem;'>
+<b>Journalist spør:</b> «Hvor kritisk skadet er personen dere nettopp hentet ut?»<br>
+<b>Svar med bro:</b> <i>«Helsevesenet må uttale seg om skadeomfanget, men det jeg kan si om vår innsats er at vi fikk pasienten raskt ned til ventende ambulanse til tross for svært krevende terreng.»</i>
+</div>
+</div>
+
+<div style='display:grid;grid-template-columns:1fr 1fr;gap:12px;'>
+<div style='background:rgba(128,128,128,0.06);border-radius:10px;padding:12px;'>
+<div style='font-weight:bold;margin-bottom:4px;'>⏱️ Kjøp deg tid</div>
+<div style='font-size:0.85rem;opacity:0.85;'>«Jeg er midt i en operativ vurdering. Send SMS – jeg ringer tilbake om 15 minutter.»<br>Bruk tiden til å hente ut godkjente fakta fra denne skjermen.</div>
+</div>
+<div style='background:rgba(128,128,128,0.06);border-radius:10px;padding:12px;'>
+<div style='font-weight:bold;margin-bottom:4px;'>👁️ Én stemme ut</div>
+<div style='font-size:0.85rem;opacity:0.85;'>Kun operativ leder eller dedikert kommunikasjonsansvarlig snakker med media. Pass på at KO-tavla ikke synes i bakgrunnen på bilder/video.</div>
+</div>
+</div>
+
+</div>""", unsafe_allow_html=True)
         st.stop()
 
     # ── HEADER + KOMMUNIKASJONSKNAPP ─────────────────────────────────────────
