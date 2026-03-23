@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import requests
 import pandas as pd
-import os, json
+import os, json, io, struct, math
 from datetime import datetime, timedelta
 
 try:
@@ -198,6 +198,26 @@ def last_liste(fil):
 def lagre_liste(fil,data):
     with open(fil,"w",encoding="utf-8") as f: json.dump(data,f,ensure_ascii=False,indent=2)
 
+def generer_alarm_wav():
+    sr = 22050
+    sekvens = [(880,0,180),(880,220,180),(880,440,180),(660,700,500),(880,1300,180),(880,1520,180),(660,1780,600)]
+    total = int(sr * 2.6)
+    samples = [0] * total
+    for freq, start_ms, dur_ms in sekvens:
+        s = int(sr * start_ms / 1000)
+        n = int(sr * dur_ms / 1000)
+        for i in range(min(n, total - s)):
+            t = i / sr
+            env = min(1.0, i/(sr*0.01+1)) * min(1.0, (n-i-1)/(sr*0.03+1))
+            val = int(32767 * 0.38 * env * math.sin(2 * math.pi * freq * t))
+            samples[s+i] = max(-32767, min(32767, samples[s+i] + val))
+    raw = struct.pack(f'<{total}h', *samples)
+    buf = io.BytesIO()
+    buf.write(b'RIFF'); buf.write(struct.pack('<I', 36+len(raw))); buf.write(b'WAVE')
+    buf.write(b'fmt '); buf.write(struct.pack('<IHHIIHH', 16, 1, 1, sr, sr*2, 2, 16))
+    buf.write(b'data'); buf.write(struct.pack('<I', len(raw))); buf.write(raw)
+    buf.seek(0); return buf.getvalue()
+
 def beregn_rig(tid):
     try: return (datetime.strptime(tid.strip(),"%H:%M")-timedelta(minutes=30)).strftime("%H:%M")
     except: return ""
@@ -265,43 +285,49 @@ def hent_met_varsler(region_valg):
     return varsler
 
 def send_avvik_kvittering(avvik, tiltak_notat):
-    """Send e-post til avsender når avvik lukkes. Krever Resend API-nøkkel i secrets."""
-    til = avvik.get("epost", "").strip()
-    if not til:
-        return False, "Ingen e-postadresse registrert på avviket."
+    """
+    Pilot: sender varsel til admin (andreas.narstad@gmail.com) med avsenders kontaktinfo.
+    Når domene er verifisert i Resend sendes svaret direkte til avvikmelder.
+    """
     try:
         api_key = st.secrets["resend"]["api_key"]
     except Exception:
         return False, "Resend API-nøkkel mangler i Streamlit Secrets."
-    navn = avvik.get("navn", "")
-    hendelse = avvik.get("hendelse", "")
-    registrert = avvik.get("registrert", "")
+
+    navn      = avvik.get("navn", "–")
+    epost     = avvik.get("epost", "–") or "–"
+    hendelse  = avvik.get("hendelse", "")
+    registrert= avvik.get("registrert", "")
+    admin_til = "andreas.narstad@gmail.com"
+
     tekst = (
-        f"Hei {navn},\n\n"
-        f"Vi har mottatt og behandlet avviket du sendte inn {registrert}.\n\n"
-        f"Avvik:\n{hendelse}\n\n"
-        f"Tiltak / oppfølging:\n{tiltak_notat or 'Ikke oppgitt'}\n\n"
-        f"Takk for at du tok deg tid til å melde fra. "
-        f"Ta gjerne kontakt om du har spørsmål.\n\n"
-        f"Med vennlig hilsen\nNorsk Folkehjelp Melhus"
+        f"Avvik er nå lukket i NF Melhus beredskapssystem.\n\n"
+        f"── AVSENDER ──────────────────────────\n"
+        f"Navn   : {navn}\n"
+        f"E-post : {epost}\n\n"
+        f"── AVVIK ─────────────────────────────\n"
+        f"Registrert : {registrert}\n"
+        f"Hendelse   : {hendelse}\n\n"
+        f"── TILTAK ────────────────────────────\n"
+        f"{tiltak_notat or 'Ikke oppgitt'}\n\n"
+        f"──────────────────────────────────────\n"
+        f"Husk å sende svar direkte til {epost} om ønskelig.\n\n"
+        f"NF Melhus – Beredskapssystem (pilot)"
     )
     try:
         r = requests.post(
             "https://api.resend.com/emails",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
             json={
-                "from": "NF Melhus <onboarding@resend.dev>",
-                "to": [til],
-                "subject": f"Avvik behandlet – NF Melhus",
+                "from": "NF Beredskap <onboarding@resend.dev>",
+                "to":   [admin_til],
+                "subject": f"✅ Avvik lukket – {navn}",
                 "text": tekst,
             },
             timeout=10
         )
         if r.status_code in (200, 201):
-            return True, f"E-post sendt til {til}"
+            return True, f"Varsel sendt til {admin_til}"
         return False, f"Feil fra Resend ({r.status_code}): {r.text}"
     except Exception as e:
         return False, f"Kunne ikke sende e-post: {e}"
@@ -535,35 +561,7 @@ if side == "🏠 Operativ tavle":
     if d['status'] == "🔴 Rød / Høy beredskap":
         if not st.session_state.get("alarm_spilt"):
             st.session_state["alarm_spilt"] = True
-            components.html("""
-            <script>
-            function spillAlarm() {
-                try {
-                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                    const sekvens = [
-                        [880, 0.00, 0.18], [880, 0.22, 0.18], [880, 0.44, 0.18],
-                        [660, 0.70, 0.55], [880, 1.35, 0.18], [880, 1.57, 0.18],
-                        [660, 1.83, 0.65]
-                    ];
-                    sekvens.forEach(([freq, start, dur]) => {
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        osc.connect(gain); gain.connect(ctx.destination);
-                        osc.type = 'sine';
-                        osc.frequency.value = freq;
-                        gain.gain.setValueAtTime(0.5, ctx.currentTime + start);
-                        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
-                        osc.start(ctx.currentTime + start);
-                        osc.stop(ctx.currentTime + start + dur + 0.05);
-                    });
-                } catch(e) { console.log('Lydfeil:', e); }
-            }
-            // Prøv umiddelbart, og igjen etter kort tid
-            spillAlarm();
-            setTimeout(spillAlarm, 100);
-            </script>
-            <div style="display:none;">alarm</div>
-            """, height=1)
+            st.audio(generer_alarm_wav(), format="audio/wav", autoplay=True)
     else:
         st.session_state["alarm_spilt"] = False
 
