@@ -466,6 +466,78 @@ th:last-child{{text-align:right}}td{{padding:10px 14px;border-bottom:1px solid #
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 
+NATT_CSS = """
+<style>
+/* ═══ TAKTISK NATTMODUS – RØDLYS ═══ */
+html, body, .stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stMain"],
+[data-testid="stMainBlockContainer"],
+section[data-testid="stMain"] > div { background-color:#060000 !important; }
+
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] > div      { background-color:#030000 !important; }
+
+/* All tekst */
+p,span,div,h1,h2,h3,h4,h5,label,small,li,td,th,
+.stMarkdown,.stText,
+[data-testid="stMetricValue"],
+[data-testid="stMetricLabel"],
+[data-testid="stMetricDelta"],
+[data-testid="stCaptionContainer"]   { color:#cc1a00 !important; }
+
+/* Inputs */
+input,textarea,select,
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea  {
+    background:#0d0000 !important;
+    color:#cc1a00 !important;
+    border-color:#440000 !important; }
+
+/* Buttons */
+.stButton > button, button {
+    background:#150000 !important;
+    color:#cc1a00 !important;
+    border:1px solid #440000 !important; }
+.stButton > button:hover { background:#2a0000 !important; }
+
+/* Selectbox / multiselect */
+[data-testid="stSelectbox"] > div,
+[data-testid="stMultiSelect"] > div  {
+    background:#0d0000 !important;
+    border-color:#440000 !important; }
+
+/* Expander */
+[data-testid="stExpander"]           { border-color:#440000 !important; background:#0a0000 !important; }
+
+/* Tabs */
+[data-testid="stTabs"] button        { color:#993300 !important; }
+[data-testid="stTabs"] button[aria-selected="true"] { color:#ff3300 !important; border-bottom-color:#ff3300 !important; }
+
+/* Dataframe */
+[data-testid="stDataFrame"] iframe   { filter:brightness(0.25) sepia(1) saturate(4) hue-rotate(320deg) !important; }
+
+/* Kart og iframes */
+iframe                               { filter:brightness(0.2) sepia(1) saturate(3) hue-rotate(300deg) !important; }
+
+/* Bilder */
+img                                  { filter:brightness(0.3) sepia(1) saturate(4) hue-rotate(310deg) !important; }
+
+/* Separatorlinjer */
+hr                                   { border-color:#330000 !important; }
+
+/* Metrikkbokser */
+[data-testid="metric-container"]     { background:#0a0000 !important; border:1px solid #330000 !important; border-radius:8px; padding:8px; }
+
+/* Skjul Streamlit-header i nattmodus */
+[data-testid="stHeader"]             { background:#030000 !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar                  { background:#030000; }
+::-webkit-scrollbar-thumb            { background:#440000; border-radius:4px; }
+</style>
+"""
+
 CSS = """
 <style>
 /* Skjul Streamlits automatiske sidenavigasjon */
@@ -499,7 +571,11 @@ audio         {position:absolute;width:1px;height:1px;opacity:0;pointer-events:n
 # ═══════════════════════════════════════════════════════════════════════════════
 
 st.set_page_config(page_title="NF Operativ Tavle – Melhus", layout="wide", page_icon="🚑")
+if "natt_modus" not in st.session_state:
+    st.session_state["natt_modus"] = False
 st.markdown(CSS, unsafe_allow_html=True)
+if st.session_state["natt_modus"]:
+    st.markdown(NATT_CSS, unsafe_allow_html=True)
 
 d            = gs_last_json("beredskap",    FIL,              DEFAULTS)
 vp           = gs_last_json("vaktplan",     VAKTPLAN_FIL,     VP_DEFAULTS)
@@ -542,6 +618,13 @@ with st.sidebar:
               delta=f"{len(akutte)} akutte" if akutte else None,
               delta_color="inverse")
     st.metric("Skader", len(skade_liste))
+
+    st.markdown("---")
+    natt_label = "🔴 Nattmodus PÅ" if st.session_state["natt_modus"] else "🌙 Taktisk nattmodus"
+    natt_hjelp  = "Rødlys – bevarer nattsynet i felt. Klikk for å slå av." if st.session_state["natt_modus"] else "Slår på rødlys-modus for bruk i mørket. Bevarer nattsynet."
+    if st.button(natt_label, use_container_width=True, help=natt_hjelp):
+        st.session_state["natt_modus"] = not st.session_state["natt_modus"]
+        st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: OPERATIV TAVLE
@@ -593,47 +676,39 @@ if side == "🏠 Operativ tavle":
                     f"<br><br><div style='display:inline-block;{ks}padding:4px 12px;border-radius:6px;font-weight:bold;'>"
                     f"📋 {d['kort']}</div></div>", unsafe_allow_html=True)
     with c3:
-        ic = ("nf-infra-err" if "🔴" in d['ekom'] or "🔴" in d['vei']
-              else "nf-infra-warn" if "🟡" in d['ekom'] or "🟡" in d['vei'] else "nf-infra-ok")
-        st.markdown(f"<div class='nf-infra {ic}'><b>📡 Kritisk Infrastruktur:</b><br><br>"
-                    f"<b>EKOM:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['ekom']}</span><br><br>"
-                    f"<b>VEI / ISOLASJON:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['vei']}</span></div>", unsafe_allow_html=True)
+        pagaende_brudd, planlagte_brudd = hent_tensio_brudd()
+        tot_berort = sum(b["antall"] for b in pagaende_brudd)
+        har_strom_feil = bool(pagaende_brudd)
+        har_strom_plan = bool(planlagte_brudd) and not pagaende_brudd
 
-    # ── TENSIO STRØMBRUDD ────────────────────────────────────────────────────
-    pagaende_brudd, planlagte_brudd = hent_tensio_brudd()
-    tot_berort = sum(b["antall"] for b in pagaende_brudd)
+        ic = ("nf-infra-err" if "🔴" in d['ekom'] or "🔴" in d['vei'] or har_strom_feil
+              else "nf-infra-warn" if "🟡" in d['ekom'] or "🟡" in d['vei'] or har_strom_plan
+              else "nf-infra-ok")
 
-    if pagaende_brudd or planlagte_brudd:
-        st.write("")
         if pagaende_brudd:
-            brd_farge="#dc3545"; brd_bg="rgba(220,53,69,0.08)"; brd_ikon="⚡"
-            brd_tittel=f"Strømbrudd – {len(pagaende_brudd)} pågående ({tot_berort:,} berørte kunder)".replace(","," ")
+            strom_html = (f"<span style='color:#dc3545;font-weight:bold;'>⚡ {len(pagaende_brudd)} brudd"
+                          f" – {tot_berort} kunder berørt</span>"
+                          + "".join(f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}"
+                                    f"{f' ({b[\"arsak\"]})' if b.get('arsak') else ''}"
+                                    f"{f' – {b[\"start\"]}' if b.get('start') else ''}</span>"
+                                    for b in pagaende_brudd[:3])
+                          + (f"<br><span style='font-size:0.8rem;opacity:0.5;'>+{len(pagaende_brudd)-3} til</span>"
+                             if len(pagaende_brudd) > 3 else ""))
+        elif planlagte_brudd:
+            strom_html = (f"<span style='color:#b8860b;font-weight:bold;'>🔧 {len(planlagte_brudd)} planlagt</span>"
+                          + "".join(f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}"
+                                    f"{f' – {b[\"start\"]}' if b.get('start') else ''}</span>"
+                                    for b in planlagte_brudd[:2]))
         else:
-            brd_farge="#ffc107"; brd_bg="rgba(255,193,7,0.08)"; brd_ikon="🔧"
-            brd_tittel=f"Planlagte utkoblinger – {len(planlagte_brudd)} stk"
-        st.markdown(f"<div style='border-left:5px solid {brd_farge};background:{brd_bg};"
-                    f"border-radius:10px;padding:14px 18px;'>",unsafe_allow_html=True)
-        st.markdown(f"<b style='font-size:1.05rem;color:{brd_farge};'>{brd_ikon} Tensio – {brd_tittel}</b>",
-                    unsafe_allow_html=True)
-        tcols = st.columns(min(len(pagaende_brudd or planlagte_brudd), 4))
-        for i, b in enumerate(pagaende_brudd or planlagte_brudd):
-            with tcols[i % 4]:
-                st.markdown(f"""<div style='background:rgba(128,128,128,0.08);border-radius:8px;
-                padding:10px 12px;margin-top:8px;'>
-                <div style='font-weight:bold;font-size:0.95rem;'>{b['kommune']}</div>
-                <div style='font-size:0.85rem;opacity:0.8;'>{b['arsak']}</div>
-                <div style='font-size:0.8rem;opacity:0.6;'>▶ {b['start']}</div>
-                <div style='font-size:1rem;font-weight:bold;color:{brd_farge};margin-top:4px;'>
-                👥 {b['antall']} kunder</div>
-                {f"<div style='font-size:0.78rem;opacity:0.6;margin-top:4px;'>{b['info'][:80]}...</div>" if b.get('info') and len(b['info'])>10 else ""}
-                </div>""",unsafe_allow_html=True)
-        st.markdown("</div>",unsafe_allow_html=True)
-    else:
-        st.markdown("""<div style='border-left:5px solid #28a745;background:rgba(40,167,69,0.07);
-        border-radius:10px;padding:11px 18px;margin-top:8px;'>
-        <span style='color:#28a745;font-weight:bold;'>⚡ Tensio – Ingen registrerte strømbrudd i regionen</span>
-        <span style='opacity:0.5;font-size:0.8rem;'> · Oppdateres hvert 2. min</span>
-        </div>""",unsafe_allow_html=True)
+            strom_html = "<span style='color:#28a745;font-size:0.88rem;'>✅ Ingen strømbrudd</span>"
+
+        st.markdown(
+            f"<div class='nf-infra {ic}'><b>📡 Kritisk Infrastruktur:</b><br><br>"
+            f"<b>EKOM:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['ekom']}</span><br><br>"
+            f"<b>VEI / ISOLASJON:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['vei']}</span><br><br>"
+            f"<b>STRØM (Tensio):</b><br>{strom_html}"
+            f"<br><span style='font-size:0.72rem;opacity:0.4;'>↻ 2 min</span></div>",
+            unsafe_allow_html=True)
 
     # Kart og varsler
     st.write("---")
