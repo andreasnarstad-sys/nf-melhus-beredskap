@@ -490,6 +490,7 @@ CSS = """
 .nf-step      {background:rgba(128,128,128,0.05);border:1px solid rgba(128,128,128,0.15);border-radius:10px;padding:18px 20px;margin-bottom:14px;}
 .nf-step-ttl  {font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;opacity:0.55;margin-bottom:12px;font-weight:bold;}
 .nf-sub       {text-align:right;font-size:0.85rem;opacity:0.7;margin-top:8px;}
+audio         {position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
 </style>
 """
 
