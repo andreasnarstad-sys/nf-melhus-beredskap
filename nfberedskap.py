@@ -747,6 +747,44 @@ if side == "🏠 Operativ tavle":
             f"<br><span style='font-size:0.72rem;opacity:0.4;'>↻ 2 min</span></div>",
             unsafe_allow_html=True)
 
+    # Politilogg-boks på operativ tavle
+    st.write("")
+    pl_siste = hent_politilogg("")
+    if pl_siste:
+        pl_linjer = ""
+        for h in pl_siste[:5]:
+            kat  = str(h.get("category") or h.get("tema") or h.get("type") or h.get("kategori") or "Annet").strip().capitalize()
+            kom  = h.get("municipality") or h.get("kommune") or h.get("location") or h.get("sted") or "–"
+            tid_r = h.get("createdOn") or h.get("time") or h.get("timestamp") or h.get("dato") or ""
+            try:
+                tid_str = datetime.fromisoformat(str(tid_r).replace("Z","+00:00")).strftime("%d.%m %H:%M") if tid_r else "–"
+            except: tid_str = str(tid_r)[:11]
+            tekst = h.get("text") or h.get("description") or h.get("desc") or h.get("melding") or h.get("title") or ""
+            tekst_kort = (tekst[:80] + "…") if len(tekst) > 80 else tekst
+            farge = POLITILOGG_FARGER.get(kat, "#6c757d")
+            pl_linjer += (
+                f"<span style='display:inline-block;background:{farge};color:white;"
+                f"font-size:0.68rem;border-radius:3px;padding:1px 5px;margin-right:4px;'>{kat}</span>"
+                f"<span style='font-size:0.82rem;'><b>{kom}</b> &nbsp;"
+                f"<span style='opacity:0.55;'>{tid_str}</span>"
+                f"{(' – ' + tekst_kort) if tekst_kort else ''}</span><br>"
+            )
+        st.markdown(
+            f"<div class='nf-card' style='padding:12px 16px;'>"
+            f"<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b>"
+            f"<span style='float:right;font-size:0.72rem;opacity:0.45;'>↻ 90 sek</span><br><br>"
+            f"{pl_linjer}"
+            f"</div>",
+            unsafe_allow_html=True)
+    else:
+        st.markdown(
+            "<div class='nf-card' style='padding:12px 16px;'>"
+            "<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b><br><br>"
+            "<span style='opacity:0.5;font-size:0.85rem;'>Ingen data tilgjengelig – "
+            "<a href='https://www.politiet.no/politiloggen?distrikt=trondelag' target='_blank'>åpne politiet.no</a></span>"
+            "</div>",
+            unsafe_allow_html=True)
+
     # Kart og varsler
     st.write("---")
     ct, cf = st.columns([3,1])
