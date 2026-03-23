@@ -847,13 +847,9 @@ elif side == "👤 Registrer deltakelse":
     st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
     st.caption("Fyll ut skjemaet etter endt oppdrag eller vakt.")
 
-    # Tilbakemelding vises UTENFOR skjema så den ikke forsvinner ved clear_on_submit
-    if st.session_state.get("del_melding"):
-        mtype, mtekst = st.session_state.pop("del_melding")
-        if mtype == "ok": st.success(mtekst)
-        else: st.error(mtekst)
+    del_melding = st.empty()
 
-    with st.form("deltakelse_form", clear_on_submit=True):
+    with st.form("deltakelse_form"):
         k1,k2 = st.columns(2)
         with k1:
             navn    = st.text_input("Navn *")
@@ -873,7 +869,7 @@ elif side == "👤 Registrer deltakelse":
 
     if sendt:
         if not navn.strip():
-            st.session_state["del_melding"] = ("feil", "Navn er påkrevd.")
+            del_melding.error("Navn er påkrevd.")
         else:
             try:
                 os.makedirs(VEDLEGG_MAPPE, exist_ok=True)
@@ -890,10 +886,9 @@ elif side == "👤 Registrer deltakelse":
                            "km_kjort":km_kjort if privatbil else 0,
                            "regnr":regnr.strip().upper() if privatbil else "",
                            "vedlegg":vn},DELTAKELSE_HDR)
-                st.session_state["del_melding"] = ("ok", f"✅ Deltakelse registrert for **{navn.strip()}**")
+                del_melding.success(f"✅ Deltakelse registrert for **{navn.strip()}**")
             except Exception as e:
-                st.session_state["del_melding"] = ("feil", f"Feil ved lagring: {e}")
-        st.rerun()
+                del_melding.error(f"Feil ved lagring: {e}")
 
     st.write("---"); st.subheader("📋 Registreringer i dag")
     today=datetime.now().strftime('%d.%m.%Y')
