@@ -912,6 +912,113 @@ elif side == "📝 Loggføring":
 </div>
 
 </div>""", unsafe_allow_html=True)
+
+        # ── PRESSEMELDING ─────────────────────────────────────────────────────
+        st.write("---")
+        st.markdown("### 📰 Generer pressemelding")
+        st.caption("Fyll ut feltene til venstre – pressemeldingen oppdateres i sanntid til høyre.")
+        st.write("")
+
+        skj, prev = st.columns([1, 1], gap="large")
+
+        with skj:
+            st.markdown("**📋 Oppdragsinfo**")
+            pm_oppdragsgiver = st.text_input("Oppdragsgiver", placeholder="Trøndelag politidistrikt", key="pm_og")
+            pm_hendelse      = st.text_area("Hva har skjedd?", placeholder="et omfattende jordskred som har tatt med seg fylkesveien og isolert flere husstander", height=80, key="pm_hend")
+            pm_sted          = st.text_input("Geografisk område", placeholder="Hovin i Melhus kommune", key="pm_sted")
+            pm_tid           = st.text_input("Tidspunkt for varsling", value=datetime.now().strftime("%d.%m.%Y kl. %H:%M"), key="pm_tid")
+
+            st.write("")
+            st.markdown("**👥 Vår innsats**")
+            pm_antall        = st.number_input("Antall frivillige mannskaper", min_value=1, value=10, key="pm_ant")
+            pm_ressurser     = st.multiselect("Spesialressurser i bruk",
+                                ["ATV","Snøscooter","Drone","Ambulanse","KO-vogn","Båt","Hundeekvipasje","Båre/terrengbåre"],
+                                key="pm_res")
+            pm_oppgave       = st.text_area("Vår konkrete oppgave", placeholder="Vi bistår med evakuering av beboere, driver førstehjelp på samleplass...", height=90, key="pm_opp")
+            pm_samvirke      = st.text_input("Samvirke (hvem jobber vi med?)", placeholder="Norske Redningshunder og Røde Kors", key="pm_sam")
+
+            st.write("")
+            st.markdown("**🌧️ Forhold og publikum**")
+            pm_forhold       = st.text_area("Utfordrende forhold (fakta)", placeholder="Dårlig vær, utfall av mobilnett og ufremkommelige veier.", height=70, key="pm_for")
+            pm_rad           = st.text_area("Råd til publikum", placeholder="Hold avstand til skredområdet og ikke oppsøk rasstedet på egenhånd.", height=70, key="pm_rad")
+
+            st.write("")
+            st.markdown("**📞 Pressekontakt**")
+            pm_kontakt       = st.text_input("Navn, tittel og telefon", placeholder="Ola Nordmann, Operativ leder – 9XX XX XXX", key="pm_kon")
+
+        # ── Generer tekst ──────────────────────────────────────────────────────
+        dato_str = datetime.now().strftime("%d.%m.%Y").upper()
+        by_str   = (pm_sted.split()[0].upper() if pm_sted else "MELHUS")
+        res_str  = (", ".join(pm_ressurser[:-1]) + " og " + pm_ressurser[-1]
+                    if len(pm_ressurser) > 1 else (pm_ressurser[0] if pm_ressurser else ""))
+
+        pm_tekst = f"""PRESSEMELDING: Norsk Folkehjelp bistår nødetatene{f' i {pm_sted}' if pm_sted else ''}
+
+{by_str}, {dato_str}: Norsk Folkehjelp Melhus og Orkland er kalt ut på oppdrag{f' fra {pm_oppdragsgiver}' if pm_oppdragsgiver else ''} for å bistå ved {pm_hendelse or '[beskriv hendelse]'}{f' på {pm_sted}' if pm_sted else ''}. Våre mannskaper ble varslet {pm_tid}, og vi var raskt på plass med våre første ressurser.
+
+SITUASJON OG VÅR ROLLE I FELT
+Akkurat nå har Norsk Folkehjelp {pm_antall} frivillige mannskaper i aktiv innsats.{f' Vår hovedoppgave i denne fasen av aksjonen er å {pm_oppgave}' if pm_oppgave else ''}
+{f'I tillegg til bakkemannskaper har vi satt inn spesialressurser, herunder {res_str}. ' if res_str else ''}{f'Vi jobber tett og godt sammen med {pm_samvirke} for å løse oppdraget mest mulig effektivt.' if pm_samvirke else ''}
+
+{f'''KREVENDE FORHOLD
+Operasjonen foregår under krevende forhold. Innsatsen påvirkes av {pm_forhold}
+''' if pm_forhold else ''}
+{f'''OPPFORDRING TIL PUBLIKUM
+Av hensyn til den pågående redningsaksjonen ber vi publikum om å {pm_rad} Vi ber alle følge politiets anvisninger.
+''' if pm_rad else ''}
+VIKTIG INFORMASJON OM HENDELSEN
+Norsk Folkehjelp er en støtteressurs for myndighetene. For overordnet status på hendelsens omfang, årsakssammenhenger, eller opplysninger om savnede/skadde, henviser vi direkte til Politiets innsatsleder eller AMK.
+
+{f'''KUN FOR MEDIA – PRESSEKONTAKT:
+{pm_kontakt} – Norsk Folkehjelp Melhus og Orkland''' if pm_kontakt else ''}
+
+[Slutt på pressemelding]"""
+
+        with prev:
+            st.markdown("**👁️ Forhåndsvisning**")
+            st.markdown(f"""<div style='background:rgba(40,167,69,0.05);border:2px solid #28a745;
+            border-radius:12px;padding:20px 24px;font-family:Georgia,serif;
+            font-size:0.92rem;line-height:1.8;white-space:pre-wrap;'>{pm_tekst}</div>""",
+            unsafe_allow_html=True)
+            st.write("")
+
+            # Eksport som tekstfil
+            st.download_button("📄 Last ned som tekstfil", data=pm_tekst.encode("utf-8"),
+                file_name=f"pressemelding_{datetime.now().strftime('%Y%m%d_%H%M')}.txt",
+                mime="text/plain", use_container_width=True)
+
+            # Eksport som HTML
+            pm_html = f"""<!DOCTYPE html><html lang="no"><head><meta charset="UTF-8">
+<title>Pressemelding – NF Melhus og Orkland</title>
+<style>body{{font-family:Georgia,serif;max-width:700px;margin:50px auto;color:#222;line-height:1.8;padding:0 20px}}
+h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
+.meta{{color:#666;font-size:0.9rem;margin-bottom:24px}}
+.seksjon{{margin-top:24px;font-weight:bold;text-transform:uppercase;letter-spacing:0.05em;color:#333}}
+.footer{{margin-top:32px;border-top:1px solid #ddd;padding-top:16px;font-size:0.85rem;color:#666}}
+@media print{{body{{margin:20px}}}}</style></head><body>
+<h1>Pressemelding</h1>
+<div class="meta">Norsk Folkehjelp Melhus og Orkland · {dato_str}</div>
+<pre style="font-family:Georgia,serif;white-space:pre-wrap">{pm_tekst}</pre>
+</body></html>"""
+            st.download_button("🌐 Last ned som HTML (hjemmeside)", data=pm_html.encode("utf-8"),
+                file_name=f"pressemelding_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+                mime="text/html", use_container_width=True)
+
+            # Publiser til logg
+            st.write("")
+            if st.button("📢 Publiser til logg som «Frigitt til media»",
+                         use_container_width=True, type="primary", key="pm_pub"):
+                liste = gs_last_liste("logg", LOGG_FIL)
+                liste.append({
+                    "id": datetime.now().strftime('%Y%m%d%H%M%S'),
+                    "tidspunkt": datetime.now().strftime('%d.%m.%Y %H:%M'),
+                    "forfatter": "Kommunikasjonsansvarlig",
+                    "gradering": "frigjort",
+                    "tekst": pm_tekst
+                })
+                gs_lagre_liste("logg", LOGG_FIL, liste, LOGG_HEADERS)
+                st.success("✅ Pressemelding publisert i loggen som «Frigitt til media»")
+
         st.stop()
 
     # ── HEADER + KOMMUNIKASJONSKNAPP ─────────────────────────────────────────
