@@ -535,12 +535,35 @@ if side == "🏠 Operativ tavle":
     if d['status'] == "🔴 Rød / Høy beredskap":
         if not st.session_state.get("alarm_spilt"):
             st.session_state["alarm_spilt"] = True
-            components.html("""<script>
-            const c=new(window.AudioContext||window.webkitAudioContext)();
-            function p(f,s,d){const o=c.createOscillator(),g=c.createGain();o.connect(g);g.connect(c.destination);
-            o.type='square';o.frequency.value=f;g.gain.setValueAtTime(0.4,c.currentTime+s);
-            g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+s+d);o.start(c.currentTime+s);o.stop(c.currentTime+s+d+0.05);}
-            p(880,0,.15);p(880,.2,.15);p(880,.4,.15);p(660,.7,.6);</script>""", height=0)
+            components.html("""
+            <script>
+            function spillAlarm() {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const sekvens = [
+                        [880, 0.00, 0.18], [880, 0.22, 0.18], [880, 0.44, 0.18],
+                        [660, 0.70, 0.55], [880, 1.35, 0.18], [880, 1.57, 0.18],
+                        [660, 1.83, 0.65]
+                    ];
+                    sekvens.forEach(([freq, start, dur]) => {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.connect(gain); gain.connect(ctx.destination);
+                        osc.type = 'sine';
+                        osc.frequency.value = freq;
+                        gain.gain.setValueAtTime(0.5, ctx.currentTime + start);
+                        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+                        osc.start(ctx.currentTime + start);
+                        osc.stop(ctx.currentTime + start + dur + 0.05);
+                    });
+                } catch(e) { console.log('Lydfeil:', e); }
+            }
+            // Prøv umiddelbart, og igjen etter kort tid
+            spillAlarm();
+            setTimeout(spillAlarm, 100);
+            </script>
+            <div style="display:none;">alarm</div>
+            """, height=1)
     else:
         st.session_state["alarm_spilt"] = False
 
