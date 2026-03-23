@@ -943,6 +943,13 @@ elif side == "📝 Loggføring":
             pm_rad           = st.text_area("Råd til publikum", placeholder="Hold avstand til skredområdet og ikke oppsøk rasstedet på egenhånd.", height=70, key="pm_rad")
 
             st.write("")
+            st.markdown("**🔁 Henvisninger**")
+            pm_hvem_bistaar  = st.text_input("NF Melhus bistår hvem?", placeholder="nødetatene", value="nødetatene", key="pm_bis",
+                                              help="Vises i tittelen: «Norsk Folkehjelp bistår [dette]»")
+            pm_henvis        = st.text_input("Henvis media videre til", placeholder="Politiets innsatsleder eller AMK", value="Politiets innsatsleder eller AMK", key="pm_hen",
+                                              help="Vises nederst i pressemeldingen")
+
+            st.write("")
             st.markdown("**📞 Pressekontakt**")
             pm_kontakt       = st.text_input("Navn, tittel og telefon", placeholder="Ola Nordmann, Operativ leder – 9XX XX XXX", key="pm_kon")
 
@@ -952,7 +959,7 @@ elif side == "📝 Loggføring":
         res_str  = (", ".join(pm_ressurser[:-1]) + " og " + pm_ressurser[-1]
                     if len(pm_ressurser) > 1 else (pm_ressurser[0] if pm_ressurser else ""))
 
-        pm_tekst = f"""PRESSEMELDING: Norsk Folkehjelp bistår nødetatene{f' i {pm_sted}' if pm_sted else ''}
+        pm_tekst = f"""PRESSEMELDING: Norsk Folkehjelp bistår {pm_hvem_bistaar or 'nødetatene'}{f' i {pm_sted}' if pm_sted else ''}
 
 {by_str}, {dato_str}: Norsk Folkehjelp Melhus og Orkland er kalt ut på oppdrag{f' fra {pm_oppdragsgiver}' if pm_oppdragsgiver else ''} for å bistå ved {pm_hendelse or '[beskriv hendelse]'}{f' på {pm_sted}' if pm_sted else ''}. Våre mannskaper ble varslet {pm_tid}, og vi var raskt på plass med våre første ressurser.
 
@@ -967,7 +974,7 @@ Operasjonen foregår under krevende forhold. Innsatsen påvirkes av {pm_forhold}
 Av hensyn til den pågående redningsaksjonen ber vi publikum om å {pm_rad} Vi ber alle følge politiets anvisninger.
 ''' if pm_rad else ''}
 VIKTIG INFORMASJON OM HENDELSEN
-Norsk Folkehjelp er en støtteressurs for myndighetene. For overordnet status på hendelsens omfang, årsakssammenhenger, eller opplysninger om savnede/skadde, henviser vi direkte til Politiets innsatsleder eller AMK.
+Norsk Folkehjelp er en støtteressurs for myndighetene. For overordnet status på hendelsens omfang, årsakssammenhenger, eller opplysninger om savnede/skadde, henviser vi direkte til {pm_henvis or 'Politiets innsatsleder eller AMK'}.
 
 {f'''KUN FOR MEDIA – PRESSEKONTAKT:
 {pm_kontakt} – Norsk Folkehjelp Melhus og Orkland''' if pm_kontakt else ''}
