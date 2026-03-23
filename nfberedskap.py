@@ -686,19 +686,19 @@ if side == "🏠 Operativ tavle":
               else "nf-infra-ok")
 
         if pagaende_brudd:
-            strom_html = (f"<span style='color:#dc3545;font-weight:bold;'>⚡ {len(pagaende_brudd)} brudd"
-                          f" – {tot_berort} kunder berørt</span>"
-                          + "".join(f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}"
-                                    f"{f' ({b[\"arsak\"]})' if b.get('arsak') else ''}"
-                                    f"{f' – {b[\"start\"]}' if b.get('start') else ''}</span>"
-                                    for b in pagaende_brudd[:3])
-                          + (f"<br><span style='font-size:0.8rem;opacity:0.5;'>+{len(pagaende_brudd)-3} til</span>"
-                             if len(pagaende_brudd) > 3 else ""))
+            brudd_linjer = ""
+            for b in pagaende_brudd[:3]:
+                arsak_str = f" ({b['arsak']})" if b.get('arsak') else ""
+                start_str = f" – {b['start']}" if b.get('start') else ""
+                brudd_linjer += f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}{arsak_str}{start_str}</span>"
+            ekstra = f"<br><span style='font-size:0.8rem;opacity:0.5;'>+{len(pagaende_brudd)-3} til</span>" if len(pagaende_brudd) > 3 else ""
+            strom_html = f"<span style='color:#dc3545;font-weight:bold;'>⚡ {len(pagaende_brudd)} brudd – {tot_berort} kunder berørt</span>{brudd_linjer}{ekstra}"
         elif planlagte_brudd:
-            strom_html = (f"<span style='color:#b8860b;font-weight:bold;'>🔧 {len(planlagte_brudd)} planlagt</span>"
-                          + "".join(f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}"
-                                    f"{f' – {b[\"start\"]}' if b.get('start') else ''}</span>"
-                                    for b in planlagte_brudd[:2]))
+            plan_linjer = ""
+            for b in planlagte_brudd[:2]:
+                start_str = f" – {b['start']}" if b.get('start') else ""
+                plan_linjer += f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}{start_str}</span>"
+            strom_html = f"<span style='color:#b8860b;font-weight:bold;'>🔧 {len(planlagte_brudd)} planlagt</span>{plan_linjer}"
         else:
             strom_html = "<span style='color:#28a745;font-size:0.88rem;'>✅ Ingen strømbrudd</span>"
 
