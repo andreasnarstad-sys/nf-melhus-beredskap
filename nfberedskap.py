@@ -17,7 +17,7 @@ except ImportError:
 STD_HEADERS = {'User-Agent':'NorskFolkehjelpBeredskap/28.0','Accept':'application/json'}
 
 REGION_FILTER = {
-    "Trøndelag (Melhus/Orkland)": {
+    "Trøndelag (Melhus)": {
         "termer":["50","trøndelag","melhus","orkland","trollheimen","skaun","gauldal","trondheim","oppdal","rindal","heiane"],
         "lat_min":62.5,"lat_max":64.5,"lon_min":8.5,"lon_max":12.5},
     "Hele Norge":{},
@@ -27,7 +27,7 @@ REGION_FILTER = {
     "Østlandet": {"termer":["03","31","32","33","34","39","40","oslo","østfold","akershus","buskerud","innlandet","vestfold","telemark"]}
 }
 KART_KOORDINATER = {
-    "Trøndelag (Melhus/Orkland)":"lat=63.26&lon=10.15&zoom=8",
+    "Trøndelag (Melhus)":"lat=63.26&lon=10.15&zoom=8",
     "Hele Norge":"lat=64.00&lon=12.00&zoom=4","Nord-Norge":"lat=68.50&lon=15.00&zoom=5",
     "Vestlandet":"lat=60.80&lon=6.00&zoom=6","Sørlandet":"lat=58.50&lon=7.50&zoom=7",
     "Østlandet":"lat=60.50&lon=10.50&zoom=6"
@@ -37,7 +37,7 @@ EVENT_MAP = {"snowAvalanche":"SNØSKRED","flood":"FLOM","landslide":"JORDSKRED",
              "rain":"STYRTREGN","forestFire":"SKOGBRANNFARE"}
 STATUS_FARGER = {"🟢 Normal Beredskap":"#28a745","🟡 Forhøyet Beredskap":"#ffc107","🔴 Rød / Høy beredskap":"#dc3545"}
 NVE_REGIONER  = {
-    "Trøndelag (Melhus/Orkland)":[3019,3020,3022],
+    "Trøndelag (Melhus)":[3019,3020,3022],
     "Hele Norge":list(range(3001,3035)),
     "Nord-Norge":[3005,3006,3007,3008,3009,3010,3011,3012,3013,3014,3015,3016,3017,3018],
     "Vestlandet":[3021,3023,3024],"Sørlandet":[],"Østlandet":[3025]
@@ -169,7 +169,7 @@ def gs_lagre_liste(tab, fallback_fil, data, headers):
         st.warning(f"GS lagringsfeil: {e}")
         lagre_liste(fallback_fil, data)
 
-DEFAULTS = {"status":"🟢 Normal Beredskap","beskjed":"Klar til innsats i Melhus og omegn.",
+DEFAULTS = {"status":"🟢 Normal Beredskap","beskjed":"Klar til innsats i Melhus.",
             "leder":"Ikke satt","vakt":"9XX XX XXX","kort":"Daglig drift",
             "logg":"","ekom":"🟢 Normal drift","vei":"🟢 Veinett åpent"}
 VP_DEFAULTS = {"sted":"","lagleder":"","mannskaper":"","utstyr":"","legevakt":"",
@@ -264,6 +264,48 @@ def hent_met_varsler(region_valg):
     except Exception: pass
     return varsler
 
+def send_avvik_kvittering(avvik, tiltak_notat):
+    """Send e-post til avsender når avvik lukkes. Krever Resend API-nøkkel i secrets."""
+    til = avvik.get("epost", "").strip()
+    if not til:
+        return False, "Ingen e-postadresse registrert på avviket."
+    try:
+        api_key = st.secrets["resend"]["api_key"]
+    except Exception:
+        return False, "Resend API-nøkkel mangler i Streamlit Secrets."
+    navn = avvik.get("navn", "")
+    hendelse = avvik.get("hendelse", "")
+    registrert = avvik.get("registrert", "")
+    tekst = (
+        f"Hei {navn},\n\n"
+        f"Vi har mottatt og behandlet avviket du sendte inn {registrert}.\n\n"
+        f"Avvik:\n{hendelse}\n\n"
+        f"Tiltak / oppfølging:\n{tiltak_notat or 'Ikke oppgitt'}\n\n"
+        f"Takk for at du tok deg tid til å melde fra. "
+        f"Ta gjerne kontakt om du har spørsmål.\n\n"
+        f"Med vennlig hilsen\nNorsk Folkehjelp Melhus"
+    )
+    try:
+        r = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": "NF Melhus <onboarding@resend.dev>",
+                "to": [til],
+                "subject": f"Avvik behandlet – NF Melhus",
+                "text": tekst,
+            },
+            timeout=10
+        )
+        if r.status_code in (200, 201):
+            return True, f"E-post sendt til {til}"
+        return False, f"Feil fra Resend ({r.status_code}): {r.text}"
+    except Exception as e:
+        return False, f"Kunne ikke sende e-post: {e}"
+
 @st.cache_data(ttl=300)
 def hent_lokal_vaer():
     try:
@@ -274,7 +316,7 @@ def hent_lokal_vaer():
         return now['air_temperature'],now['wind_speed'],prog
     except: return None,None,[]
 
-# Kommuner i Melhus/Orkland-regionen vi filtrerer på
+# Kommuner i Melhus-regionen vi filtrerer på
 _TENSIO_KOMMUNER = ["melhus","orkland","midtre gauldal","skaun","trondheim","malvik",
                     "klæbu","rissa","ørland","bjugn","agdenes","snillfjord","hitra","frøya"]
 
@@ -352,7 +394,7 @@ def generer_beredskapsplan(vp,d):
 .nood .card{{border-left:4px solid #cc0000}}
 .ftr{{color:#aaa;font-size:0.8rem;text-align:center;margin-top:24px;border-top:1px solid #eee;padding-top:12px}}
 @media print{{body{{padding:15px}}}}</style></head><body>
-<div class="hdr"><h1>🚑 Norsk Folkehjelp – Beredskapsplan</h1><p>Melhus &amp; Orkland | {dato} | {d['status']}</p></div>
+<div class="hdr"><h1>🚑 Norsk Folkehjelp – Beredskapsplan</h1><p>Melhus | {dato} | {d['status']}</p></div>
 {f'<div class="rig">⏰ Ferdig rigget: {rig} (30 min før)</div>' if rig else ''}
 <div class="grid">
 <div class="card"><h3>📍 Sted</h3><div class="v">{vp['sted'] or '–'}</div></div>
@@ -365,7 +407,7 @@ def generer_beredskapsplan(vp,d):
 <div class="card"><h3>🏥 Legevakt</h3><div class="v">{vp['legevakt'] or '–'}</div></div>
 <div class="card"><h3>🏨 Sykehus</h3><div class="v">{vp['sykehus'] or '–'}</div></div></div>
 {f'<div class="card" style="margin-bottom:16px"><h3>📝 Merknader</h3><div>{vp["notat"]}</div></div>' if vp["notat"] else ''}
-<div class="ftr">NF Melhus &amp; Orkland | Vaktleder: {d['leder']} | {d['vakt']}</div>
+<div class="ftr">NF Melhus | Vaktleder: {d['leder']} | {d['vakt']}</div>
 </body></html>"""
 
 def generer_tilbud(kunde,arr,dato_str,linjer,total,forbruk):
@@ -386,14 +428,14 @@ th:last-child{{text-align:right}}td{{padding:10px 14px;border-bottom:1px solid #
 .tot td:last-child{{color:#cc0000;font-size:1.3rem;text-align:right}}
 .ftr{{color:#aaa;font-size:0.8rem;text-align:center;margin-top:28px;border-top:1px solid #eee;padding-top:14px}}
 @media print{{body{{padding:20px}}}}</style></head><body>
-<div class="hdr"><h1>🚑 Tilbud – Sanitetsvakt</h1><p>Norsk Folkehjelp Melhus &amp; Orkland · {dato_gen}</p></div>
+<div class="hdr"><h1>🚑 Tilbud – Sanitetsvakt</h1><p>Norsk Folkehjelp Melhus · {dato_gen}</p></div>
 <div class="meta">
 <div><div class="lbl">Kunde / Arrangør</div><div class="v">{kunde or '–'}</div></div>
 <div><div class="lbl">Arrangement</div><div class="v">{arr or '–'}</div></div>
 <div><div class="lbl">Dato</div><div class="v">{dato_str or '–'}</div></div></div>
 <table><thead><tr><th>Beskrivelse</th><th>Beregning</th><th style='text-align:right'>Beløp</th></tr></thead>
 <tbody>{rader}<tr class="tot"><td colspan="2">TOTALT</td><td>{total:,.0f} kr</td></tr></tbody></table>
-<div class="ftr">Norsk Folkehjelp – Melhus &amp; Orkland | Generert {dato_gen}<br>Priser er veiledende og ekskl. mva.</div>
+<div class="ftr">Norsk Folkehjelp – Melhus | Generert {dato_gen}<br>Priser er veiledende og ekskl. mva.</div>
 </body></html>""".replace(","," ")
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -429,7 +471,7 @@ CSS = """
 # APP START
 # ═══════════════════════════════════════════════════════════════════════════════
 
-st.set_page_config(page_title="NF Operativ Tavle – Melhus og omegn", layout="wide", page_icon="🚑")
+st.set_page_config(page_title="NF Operativ Tavle – Melhus", layout="wide", page_icon="🚑")
 st.markdown(CSS, unsafe_allow_html=True)
 
 d            = gs_last_json("beredskap",    FIL,              DEFAULTS)
@@ -479,7 +521,7 @@ with st.sidebar:
 # ═══════════════════════════════════════════════════════════════════════════════
 if side == "🏠 Operativ tavle":
 
-    st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp Melhus og omegn</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp Melhus</h2>", unsafe_allow_html=True)
 
     # Status-banner
     st.markdown(f"""<div style="background:{bg};padding:20px;border-radius:15px;
@@ -1231,11 +1273,17 @@ elif side == "⚙️ Administrasjon":
                     {f"<br><small>📝 {a.get('oppfolging_notat','')}</small>" if a.get('oppfolging_notat') else ""}
                     </div>""", unsafe_allow_html=True)
                     if not fulgt:
-                        ka,kb=st.columns([2,1])
-                        with ka: notat=st.text_input("Notat",key=f"an_{i}",placeholder="Tiltak...",label_visibility="collapsed")
-                        with kb:
+                        ka,kb,kc=st.columns([3,1,1])
+                        with ka: notat=st.text_input("Notat",key=f"an_{i}",placeholder="Beskriv tiltak som er gjort...",label_visibility="collapsed")
+                        with kb: send_svar=st.checkbox("Send svar",key=f"svar_{i}",value=bool(a.get("epost")),
+                                                        help=f"Sender e-post til {a.get('epost','–') or 'ingen e-post registrert'}")
+                        with kc:
                             if st.button("✅ Lukk",key=f"al_{i}",use_container_width=True):
                                 avvik_liste[i]["fulgt_opp"]=True; avvik_liste[i]["oppfolging_notat"]=notat; endret=True
+                                if send_svar and a.get("epost"):
+                                    ok,melding=send_avvik_kvittering(a, notat)
+                                    if ok: st.toast(f"📧 {melding}",icon="✅")
+                                    else:  st.toast(f"⚠️ {melding}",icon="⚠️")
                     else:
                         da1,da2=st.columns(2)
                         with da1:
