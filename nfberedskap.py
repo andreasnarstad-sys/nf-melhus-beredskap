@@ -1192,6 +1192,60 @@ elif side == "⚙️ Administrasjon":
             if st.button("🔒 Logg ut"): st.session_state["admin_ok"]=False; st.rerun()
         st.write("")
 
+        # ── SYSTEMSTATUS PANEL ───────────────────────────────────────────────
+        def sjekk_api(url, headers=None, timeout=5):
+            try:
+                r = requests.get(url, headers=headers or STD_HEADERS, timeout=timeout)
+                return r.status_code < 500
+            except: return False
+
+        def lampe(ok, tekst, detalj=""):
+            farge = "#28a745" if ok else "#dc3545"
+            status = "OK" if ok else "FEIL"
+            return f"""<div style='display:flex;align-items:center;gap:10px;padding:8px 12px;
+            background:rgba(128,128,128,0.06);border-radius:8px;'>
+            <div style='width:14px;height:14px;border-radius:50%;background:{farge};
+            box-shadow:0 0 6px {farge};flex-shrink:0;'></div>
+            <div><b style='font-size:0.9rem;'>{tekst}</b>
+            <span style='font-size:0.78rem;opacity:0.6;margin-left:6px;'>{status}{(' – '+detalj) if detalj else ''}</span>
+            </div></div>"""
+
+        with st.expander("🔌 Systemstatus", expanded=False):
+            with st.spinner("Sjekker tilkoblinger..."):
+                # Google Sheets
+                try:
+                    sh = _gs_init()
+                    gs_ok = sh is not None
+                    gs_detalj = sh.title if gs_ok else "Ingen tilkobling"
+                except: gs_ok=False; gs_detalj="Feil"
+
+                # MET / Yr
+                met_ok = sjekk_api("https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=63.28&lon=10.28")
+
+                # NVE Varsom
+                nve_ok = sjekk_api("https://api01.nve.no/hydrology/forecast/avalanche/v6.3.0/api/AvalancheWarningByRegion/Detail/3020/no/2026-01-01/2026-01-01")
+
+                # Tensio
+                tensio_ok = sjekk_api("https://kart.tensio.no/enterprise/rest/services/Hosted/StromstansTN/FeatureServer/0/query?where=1%3D1&outFields=objectid&returnGeometry=false&f=geojson")
+
+                # Resend
+                try:
+                    api_key = st.secrets["resend"]["api_key"]
+                    resend_ok = bool(api_key)
+                    resend_detalj = "Nøkkel konfigurert"
+                except: resend_ok=False; resend_detalj="Mangler i Secrets"
+
+            s1,s2,s3 = st.columns(3)
+            with s1:
+                st.markdown(lampe(gs_ok,    "Google Sheets", gs_detalj),    unsafe_allow_html=True)
+                st.markdown(lampe(resend_ok, "Resend e-post", resend_detalj), unsafe_allow_html=True)
+            with s2:
+                st.markdown(lampe(met_ok,  "MET / Yr API"),    unsafe_allow_html=True)
+                st.markdown(lampe(nve_ok,  "NVE Varsom API"),  unsafe_allow_html=True)
+            with s3:
+                st.markdown(lampe(tensio_ok, "Tensio strøm API"), unsafe_allow_html=True)
+
+        st.write("")
         adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
 
         # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
