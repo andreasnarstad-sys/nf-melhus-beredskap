@@ -643,7 +643,6 @@ with st.sidebar:
         "🩹 Skaderegistrering",
         "📝 Loggføring",
         "📋 Vaktinstruks",
-        "👮 Politilogg – Trøndelag",
         "💰 Kalkyle – Sanitetsvakt",
         "⚙️ Administrasjon",
     ], label_visibility="collapsed")
@@ -1344,85 +1343,6 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
                         ny_liste = [x for x in gs_last_liste("logg", LOGG_FIL) if x.get("id") != e.get("id")]
                         gs_lagre_liste("logg", LOGG_FIL, ny_liste, LOGG_HDR)
                         st.toast("Oppføring slettet", icon="🗑️"); st.rerun()
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SIDE: POLITILOGG
-# ═══════════════════════════════════════════════════════════════════════════════
-elif side == "👮 Politilogg – Trøndelag":
-    st.markdown("<h2>👮 Politilogg – Trøndelag</h2>", unsafe_allow_html=True)
-    st.caption("Live data fra politiet.no · Trøndelag politidistrikt · Oppdateres hvert 90 sek.")
-
-    # Temafiltere
-    tema_cols = st.columns(len(POLITILOGG_TEMA))
-    valgt_tema_navn = st.session_state.get("pl_tema", "Alle")
-    for i, (navn, kode) in enumerate(POLITILOGG_TEMA.items()):
-        with tema_cols[i]:
-            aktiv = valgt_tema_navn == navn
-            if st.button(
-                f"{'▶ ' if aktiv else ''}{navn}",
-                use_container_width=True,
-                type="primary" if aktiv else "secondary",
-                key=f"pl_{navn}"
-            ):
-                st.session_state["pl_tema"] = navn
-                st.cache_data.clear()
-                st.rerun()
-
-    st.write("")
-    tema_kode = POLITILOGG_TEMA.get(valgt_tema_navn, "")
-    hendelser = hent_politilogg(tema_kode)
-
-    if not hendelser:
-        st.info("Ingen hendelser funnet – prøver å hente data fra politiet.no...")
-        st.markdown(f"""<div style='text-align:center;padding:30px;'>
-        <a href='https://www.politiet.no/politiloggen?distrikt=trondelag{"&tema="+tema_kode if tema_kode else ""}'
-           target='_blank' style='color:#cc0000;font-weight:bold;font-size:1.1rem;text-decoration:none;'>
-        🔗 Åpne politiloggen direkte →</a>
-        </div>""", unsafe_allow_html=True)
-    else:
-        st.caption(f"{len(hendelser)} hendelser – {valgt_tema_navn}")
-        for h in hendelser:
-            # Hent feltene – prøv ulike navnekonvensjoner
-            kat    = h.get("category") or h.get("kategori") or h.get("type") or "–"
-            kom    = h.get("municipality") or h.get("kommune") or h.get("location") or ""
-            tid_r  = h.get("timestamp") or h.get("created") or h.get("tid") or ""
-            tekst  = h.get("text") or h.get("tekst") or h.get("summary") or h.get("message") or ""
-            status = h.get("status") or ""
-            pagaar = "pågår" in str(status).lower() or status == "Active"
-            avsl   = "avsluttet" in str(status).lower() or status == "Closed"
-            hid    = h.get("id") or h.get("threadId") or ""
-
-            # Tidspunkt
-            tid_str = ""
-            if tid_r:
-                try:
-                    dt = datetime.fromisoformat(str(tid_r).replace("Z","+00:00"))
-                    tid_str = dt.strftime("%d.%m %H:%M")
-                except: tid_str = str(tid_r)[:16]
-
-            farge   = POLITILOGG_FARGER.get(kat, "#6c757d")
-            st_ikon = "🟢 Pågår" if pagaar else ("⚫ Avsluttet" if avsl else status)
-            url_h   = f"https://www.politiet.no/politiloggen/{hid}" if hid else ""
-
-            st.markdown(f"""<div style='border-left:4px solid {farge};
-            background:rgba(128,128,128,0.05);border-radius:8px;
-            padding:12px 16px;margin-bottom:8px;'>
-            <div style='display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;'>
-            <span style='font-weight:bold;color:{farge};font-size:0.88rem;
-            text-transform:uppercase;letter-spacing:0.05em;'>{kat}</span>
-            <span style='font-size:0.82rem;opacity:0.6;'>{tid_str}
-            {f" · {kom}" if kom else ""}
-            {f" · <b>{st_ikon}</b>" if st_ikon else ""}</span>
-            </div>
-            <div style='margin-top:6px;font-size:0.93rem;line-height:1.6;'>{tekst[:300]}{"..." if len(tekst)>300 else ""}</div>
-            {f"<div style='margin-top:6px;'><a href='{url_h}' target='_blank' style='font-size:0.8rem;color:#888;'>Les mer →</a></div>" if url_h else ""}
-            </div>""", unsafe_allow_html=True)
-
-    st.write("")
-    st.markdown(f"""<div style='text-align:center;'>
-    <a href='https://www.politiet.no/politiloggen?distrikt=trondelag{"&tema="+tema_kode if tema_kode else ""}'
-       target='_blank' style='color:#888;font-size:0.85rem;text-decoration:none;'>
-    🔗 Se alle hendelser på politiet.no</a></div>""", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: VAKTINSTRUKS
