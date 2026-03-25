@@ -2086,7 +2086,7 @@ Nåværende score: **{score} poeng**
                 sv=["🟢 Normal Beredskap","🟡 Forhøyet Beredskap","🔴 Rød / Høy beredskap"]
                 ns=st.selectbox("Beredskapsnivå",sv,index=sv.index(d['status']))
                 nb=st.text_area("Beskjed til stab",value=d['beskjed'])
-                kv=["Ingen","Daglig drift","Snøskred","Flom","Jordras","Ekom-bortfall","Isolasjon / Evakuering","Søk/Redning","Ekstremvær"]
+                kv=["Ingen","Daglig drift","Snøskred","Flom","Jordras","Ekom-bortfall","Isolasjon / Evakuering","Søk/Redning","Ekstremvær","Skog- og terrengbrann","Masseskade / Større ulykke (Triage)"]
                 nk=st.selectbox("Tiltakskort",kv,index=kv.index(d['kort']))
             with a2:
                 nl=st.text_input("Leder",value=d['leder'])
