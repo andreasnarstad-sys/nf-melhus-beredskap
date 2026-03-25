@@ -944,65 +944,6 @@ elif side == "👤 Registrer deltakelse":
                 st.session_state["_del_err"] = str(e)
             st.rerun()
 
-    st.write("---")
-    st.subheader("📋 Registreringer")
-    alle_deltakelser = gs_last_liste("deltakelse", DELTAKELSE_FIL)
-    if alle_deltakelser:
-        dfd = pd.DataFrame(alle_deltakelser)
-        _dk = {"registrert":"Tidspunkt","navn":"Navn","aksjon":"Aksjon/Sted","tid_ut":"Ut","tid_inn":"Inn"}
-        vis = [c for c in _dk if c in dfd.columns]
-        st.dataframe(dfd[vis].rename(columns=_dk), use_container_width=True, hide_index=True)
-    else:
-        st.caption("Ingen registreringer ennå.")
-
-    with st.expander("🔧 Feilsøking", expanded=False):
-        st.markdown("**1. Google Sheets-tilkobling**")
-        try:
-            sh = _gs_sh()
-            if sh:
-                st.success(f"✅ Koblet til: {sh.title}")
-            else:
-                st.error("❌ Ingen GS-tilkobling (sh = None)")
-        except Exception as e:
-            st.error(f"❌ GS-feil: {e}")
-
-        st.markdown("**2. Deltakelse-ark**")
-        try:
-            ws = _gs_ws("deltakelse")
-            if ws:
-                alle = ws.get_all_values()
-                st.success(f"✅ Arket finnes – {len(alle)} rader (inkl. header)")
-                if alle:
-                    st.code(str(alle[:3]))
-            else:
-                st.error("❌ Arket finnes ikke / kunne ikke opprettes")
-        except Exception as e:
-            st.error(f"❌ Feil ved henting av ark: {e}")
-
-        st.markdown("**3. Lokal JSON-fil**")
-        try:
-            lokale = last_liste(DELTAKELSE_FIL)
-            st.info(f"Lokal JSON: {len(lokale)} rader")
-            if lokale:
-                st.code(str(lokale[-1]))
-        except Exception as e:
-            st.warning(f"Lokal fil ikke tilgjengelig: {e}")
-
-        st.markdown("**4. gs_last_liste returnerer**")
-        fra_gs = gs_last_liste("deltakelse", DELTAKELSE_FIL)
-        st.info(f"{len(fra_gs)} rader")
-        if fra_gs:
-            st.code(str(fra_gs[-1]))
-
-        st.markdown("**5. Streamlit Secrets**")
-        if "gcp_service_account" in st.secrets:
-            st.success(f"✅ gcp_service_account funnet – prosjekt: {st.secrets['gcp_service_account'].get('project_id','?')}")
-        else:
-            st.error("❌ gcp_service_account ikke i secrets")
-        if "google_sheets" in st.secrets:
-            st.success(f"✅ google_sheets funnet – ID: {st.secrets['google_sheets'].get('spreadsheet_id','?')[:20]}…")
-        else:
-            st.error("❌ google_sheets ikke i secrets")
 
 # SIDE: REGISTRER AVVIK
 # ═══════════════════════════════════════════════════════════════════════════════
