@@ -47,6 +47,7 @@ PRISER = {"grunnpris":800,"sanitet":160,"ambulanse_m":300,"mbil":300,"amb_kjt":9
 # ── DATAFILER ────────────────────────────────────────────────────────────────
 
 FIL              = "beredskap_data.json"
+DELTAKELSE_FIL   = "deltakelse_data.json"
 AVVIK_FIL        = "avvik_data.json"
 VAKTPLAN_FIL     = "vaktplan_data.json"
 SKADE_FIL        = "skade_data.json"
@@ -55,6 +56,9 @@ VEDLEGG_MAPPE    = "vedlegg"
 
 # ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
 
+DELTAKELSE_HDR = ["id","registrert","navn","tid_ut","tid_inn","aksjon",
+                  "utlegg_kr","privatbil","km_privatbil","regnr",
+                  "lagsutstyr","mannskapsbil_km","ambulanse_km","vedlegg"]
 AVVIK_HDR      = ["id","registrert","navn","epost","hendelse","konsekvens",
                    "umiddelbar_oppfolging","fulgt_opp","oppfolging_notat"]
 SKADE_HDR      = ["registrert","innsats","behandler","kjonn","alder","skadetype",
@@ -63,7 +67,7 @@ LOGG_HDR       = ["id","tidspunkt","forfatter","gradering","tekst"]
 
 _GS_BOOL   = {"vaktplan":["aktiv","skjul_forside"],
                "avvik":["umiddelbar_oppfolging","fulgt_opp"]}
-_GS_JSON   = {"skade":["skadetype","utstyr"]}
+_GS_JSON   = {"skade":["skadetype","utstyr"],"deltakelse":["vedlegg"]}
 
 @st.cache_resource
 def _gs_sh():
@@ -614,6 +618,7 @@ if st.session_state["natt_modus"]:
 d            = gs_last_json("beredskap",    FIL,              DEFAULTS)
 vp           = gs_last_json("vaktplan",     VAKTPLAN_FIL,     VP_DEFAULTS)
 avvik_liste  = gs_last_liste("avvik",   AVVIK_FIL)
+del_liste    = gs_last_liste("deltakelse", DELTAKELSE_FIL)
 skade_liste  = gs_last_liste("skade",   SKADE_FIL)
 logg_liste   = gs_last_liste("logg",    LOGG_FIL)
 akutte       = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get("fulgt_opp")]
@@ -635,6 +640,7 @@ with st.sidebar:
     st.markdown("---")
     side = st.radio("Navigasjon", [
         "🏠 Operativ tavle",
+        "👤 Registrer deltakelse",
         "⚠️ Registrer avvik",
         "🩹 Skaderegistrering",
         "📝 Loggføring",
@@ -837,6 +843,83 @@ if side == "🏠 Operativ tavle":
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: REGISTRER DELTAKELSE
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "👤 Registrer deltakelse":
+    st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
+    st.caption("Fyll ut skjemaet etter endt vakt eller aksjon. Ingen felter er obligatoriske.")
+
+    if st.session_state.get("_del_ok"):
+        st.success(f"✅ Deltakelse registrert for **{st.session_state.pop('_del_ok')}**")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        d_navn   = st.text_input("Navn", key="_d_navn")
+        d_aksjon = st.text_input("Aksjonsnavn / sted", key="_d_aksjon")
+    with c2:
+        t1, t2 = st.columns(2)
+        with t1: d_tid_ut  = st.text_input("Tid ut",  placeholder="08:00", key="_d_tid_ut")
+        with t2: d_tid_inn = st.text_input("Tid inn", placeholder="16:00", key="_d_tid_inn")
+        d_utlegg   = st.number_input("Private utlegg (kr)", min_value=0, step=50, key="_d_utlegg")
+        d_kvitt    = st.file_uploader("Kvittering", type=["jpg","jpeg","png","pdf"], key="_d_kvitt")
+
+    st.markdown("---")
+
+    d_privatbil = st.checkbox("🚗 Privatbil", key="_d_privatbil")
+    if d_privatbil:
+        p1, p2 = st.columns(2)
+        with p1: d_km_priv = st.number_input("Kjørte km", min_value=0, step=1, key="_d_km_priv")
+        with p2: d_regnr   = st.text_input("Reg.nummer", placeholder="AB 12345", key="_d_regnr")
+    else:
+        d_km_priv, d_regnr = 0, ""
+
+    d_lagsutstyr = st.checkbox("🎒 Lagsutstyr brukt", key="_d_lagutstyr")
+
+    d_mnnskap = st.checkbox("🚒 Mannskapsbil (kr 5,1/km)", key="_d_mnnskap")
+    if d_mnnskap:
+        d_km_mnnskap = st.number_input("Km – Mannskapsbil", min_value=0, step=1, key="_d_km_mnnskap")
+    else:
+        d_km_mnnskap = 0
+
+    d_amb = st.checkbox("🚑 Ambulanse (kr 5,6/km)", key="_d_amb")
+    if d_amb:
+        d_km_amb = st.number_input("Km – Ambulanse", min_value=0, step=1, key="_d_km_amb")
+    else:
+        d_km_amb = 0
+
+    st.markdown("---")
+    if st.button("💾 Registrer deltakelse", type="primary", use_container_width=True):
+        vn = []
+        if d_kvitt:
+            os.makedirs(VEDLEGG_MAPPE, exist_ok=True)
+            fn = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{d_kvitt.name}"
+            with open(os.path.join(VEDLEGG_MAPPE, fn), "wb") as fp: fp.write(d_kvitt.read())
+            vn.append(fn)
+        import uuid
+        rad = {
+            "id": str(uuid.uuid4())[:8],
+            "registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
+            "navn": d_navn.strip(),
+            "tid_ut": d_tid_ut.strip(),
+            "tid_inn": d_tid_inn.strip(),
+            "aksjon": d_aksjon.strip(),
+            "utlegg_kr": d_utlegg,
+            "privatbil": "Ja" if d_privatbil else "Nei",
+            "km_privatbil": d_km_priv,
+            "regnr": d_regnr.strip().upper(),
+            "lagsutstyr": "Ja" if d_lagsutstyr else "Nei",
+            "mannskapsbil_km": d_km_mnnskap,
+            "ambulanse_km": d_km_amb,
+            "vedlegg": vn,
+        }
+        try:
+            gs_append("deltakelse", DELTAKELSE_FIL, rad, DELTAKELSE_HDR)
+            st.session_state["_del_ok"] = d_navn.strip() or "ukjent"
+        except Exception as e:
+            st.error(f"Feil ved lagring: {e}")
+        st.rerun()
+
 # SIDE: REGISTRER AVVIK
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "⚠️ Registrer avvik":
@@ -1537,7 +1620,7 @@ elif side == "⚙️ Administrasjon":
                 st.markdown(lampe(politilogg_ok, "Politilogg (politiet.no)"), unsafe_allow_html=True)
 
         st.write("")
-        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik"])
+        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
 
         # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
         with adm_tabs[0]:
@@ -1640,4 +1723,28 @@ elif side == "⚙️ Administrasjon":
                 if endret: gs_lagre_liste("avvik",AVVIK_FIL,avvik_liste,AVVIK_HDR); st.rerun()
 
         # ── Tab 4: Deltakelser ───────────────────────────────────────────────
+        with adm_tabs[3]:
+            del_liste = gs_last_liste("deltakelse", DELTAKELSE_FIL)
+            st.caption(f"{len(del_liste)} registreringer totalt")
+            if not del_liste:
+                st.info("Ingen deltakelser registrert ennå.")
+            else:
+                _dk = {"registrert":"Tidspunkt","navn":"Navn","tid_ut":"Ut","tid_inn":"Inn",
+                       "aksjon":"Aksjon","utlegg_kr":"Utlegg kr","privatbil":"Privatbil",
+                       "km_privatbil":"Km priv","regnr":"Reg.nr","lagsutstyr":"Lagsutstyr",
+                       "mannskapsbil_km":"Km mnnskap","ambulanse_km":"Km amb"}
+                dfd = pd.DataFrame(del_liste)
+                vis = [c for c in _dk if c in dfd.columns]
+                st.dataframe(dfd[vis].rename(columns=_dk), use_container_width=True, hide_index=True)
+                st.markdown("---")
+                st.subheader("🗑️ Slett registrering")
+                valg = st.selectbox("Velg registrering å slette",
+                    options=[f"{r.get('registrert','')} – {r.get('navn','(ukjent)')} – {r.get('aksjon','')}" for r in del_liste],
+                    index=None, placeholder="Velg...", key="del_slett_valg")
+                if valg and st.button("🗑️ Slett valgt registrering", type="secondary"):
+                    etiketter = [f"{r.get('registrert','')} – {r.get('navn','(ukjent)')} – {r.get('aksjon','')}" for r in del_liste]
+                    idx = etiketter.index(valg)
+                    del_liste.pop(idx)
+                    gs_lagre_liste("deltakelse", DELTAKELSE_FIL, del_liste, DELTAKELSE_HDR)
+                    st.toast("Registrering slettet"); st.rerun()
 
