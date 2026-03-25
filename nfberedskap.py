@@ -470,83 +470,120 @@ def hent_tensio_brudd():
 # ── HTML-EKSPORT ─────────────────────────────────────────────────────────────
 
 def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, akutte_avvik, temp, vind):
-    """Regelbasert beredskapsanalyse. Returnerer (score, anbefalte_nivå, tiltak_liste)."""
+    """
+    Regelbasert beredskapsanalyse basert på NF Trøndelags beredskapsnivå-dokument.
+    Terskel: oransje NVE/MET-varsel → gul beredskap, rødt NVE/MET-varsel → vurder rød.
+    Returnerer (score, anbefalt_nivå, tiltak_liste).
+    """
     score = 0
     tiltak = []
+    har_rodt_varsel   = False
+    har_oransje_varsel = False
 
     # ── NVE / Varsom ──────────────────────────────────────────────────────────
     for v in nve_varsler.values():
         nivaa = v.get("Nivå", 0)
-        vtype = v.get("Type", "")
         omr   = v.get("Område", "")
         if nivaa >= 4:
-            score += 4
-            tiltak.append(("🔴", "Varsom", f"Nivå {nivaa} snøskredvarsel – {omr}. Unngå skredfarlig terreng. Sjekk at skredprosedyrer er kjent."))
+            score += 4; har_rodt_varsel = True
+            tiltak.append(("🔴", "Varsom",
+                f"Nivå {nivaa} snøskredvarsel – {omr}. "
+                "Iht. NF-retningslinjer kan rødt farevarsel fra NVE utløse rød beredskap. "
+                "Konsuler vaktleder – rødt nivå skal konfereres med BLPD/NK BLPD før det settes."))
         elif nivaa == 3:
-            score += 2
-            tiltak.append(("🟠", "Varsom", f"Nivå {nivaa} snøskredvarsel – {omr}. Vær oppmerksom på farlig terreng under aksjoner."))
+            score += 3; har_oransje_varsel = True
+            tiltak.append(("🟠", "Varsom",
+                f"Nivå {nivaa} snøskredvarsel – {omr}. "
+                "Oransje farevarsel tilsier gul beredskap iht. NF-retningslinjer. "
+                "Vaktleder kartlegger tilgjengelig personell og varsler via FRR."))
         elif nivaa == 2:
             score += 1
-            tiltak.append(("🟡", "Varsom", f"Nivå {nivaa} snøskredvarsel – {omr}. Hold deg oppdatert på varsom.no."))
+            tiltak.append(("🟡", "Varsom",
+                f"Nivå {nivaa} snøskredvarsel – {omr}. Følg utviklingen på varsom.no."))
 
     # ── MET / Yr ──────────────────────────────────────────────────────────────
+    HENDELSE_TILTAK = {
+        "STORM": ("sikre utstyr og kjøretøy", "etablere KO og støtte nødetater"),
+        "VIND":  ("sikre utstyr og kjøretøy", "etablere KO og støtte nødetater"),
+        "FLOM":  ("følge vannstand og sjekke tilgjengelighet i lavereliggende områder", "forberede evakueringsstøtte og ha båt/flåte tilgjengelig"),
+        "SNØFOKK": ("sjekke at veier er fremkommelige", "støtte ved stengte veier og isolerte"),
+        "JORDSKRED": ("unngå ustabilt terreng", "forberede søk i skredområder"),
+        "STYRTREGN": ("overvåke bekker og vassdrag", "forberede flomhåndtering"),
+    }
     for v in met_varsler.values():
         nivaa = v.get("Nivå", 0)
         vtype = v.get("Type", "")
         omr   = v.get("Område", "")
+        gul_tiltak, rod_tiltak = HENDELSE_TILTAK.get(vtype, ("følge med på situasjonen", "øke beredskapen"))
         if nivaa >= 4:
-            score += 4
-            if "STORM" in vtype or "VIND" in vtype:
-                tiltak.append(("🔴", "Yr/MET", f"Rødt {vtype}-varsel – {omr}. Sikre utstyr. Forbered støtte til nødetater. Vurder å etablere KO."))
-            elif "FLOM" in vtype:
-                tiltak.append(("🔴", "Yr/MET", f"Rødt FLOM-varsel – {omr}. Sjekk tilgjengelighet til lavereliggende områder. Forbered evakueringsstøtte."))
-            else:
-                tiltak.append(("🔴", "Yr/MET", f"Rødt {vtype}-varsel – {omr}. Økt beredskap anbefales."))
+            score += 4; har_rodt_varsel = True
+            tiltak.append(("🔴", "Yr/MET",
+                f"Rødt {vtype}-varsel – {omr}. "
+                f"Rødt farevarsel kan utløse rød beredskap. Anbefalt tiltak: {rod_tiltak}. "
+                "Konsuler vaktleder – rødt nivå varsles med SMS og talemelding via FRR."))
         elif nivaa == 3:
-            score += 2
-            if "STORM" in vtype or "VIND" in vtype:
-                tiltak.append(("🟠", "Yr/MET", f"Oransje {vtype}-varsel – {omr}. Hold mannskaper tilgjengelig. Sjekk at kjøretøy er operative."))
-            elif "FLOM" in vtype:
-                tiltak.append(("🟠", "Yr/MET", f"Oransje FLOM-varsel – {omr}. Følg med på vannstand. Ha evakueringsutstyr klart."))
-            else:
-                tiltak.append(("🟠", "Yr/MET", f"Oransje {vtype}-varsel – {omr}. Vurder forhøyet beredskap."))
+            score += 3; har_oransje_varsel = True
+            tiltak.append(("🟠", "Yr/MET",
+                f"Oransje {vtype}-varsel – {omr}. "
+                f"Oransje varsel tilsier gul beredskap. Anbefalt tiltak: {gul_tiltak}. "
+                "Vaktleder kartlegger personell og varsler via FRR-melding."))
         elif nivaa == 2:
             score += 1
-            tiltak.append(("🟡", "Yr/MET", f"Gult {vtype}-varsel – {omr}. Følg med på utviklingen."))
+            tiltak.append(("🟡", "Yr/MET",
+                f"Gult {vtype}-varsel – {omr}. Normal beredskap, men følg utviklingen."))
 
     # ── Vind (lokal) ──────────────────────────────────────────────────────────
     if vind is not None:
         if vind >= 20:
-            score += 3
-            tiltak.append(("🔴", "Yr (lokalt)", f"Sterk vind lokalt: {vind:.1f} m/s. Sjekk sikring av utstyr og kjøretøy."))
+            score += 2
+            tiltak.append(("🟠", "Yr (lokalt)",
+                f"Sterk vind lokalt: {vind:.1f} m/s. Sikre utstyr på depot. Vær oppmerksom under utrykninger."))
         elif vind >= 13:
             score += 1
-            tiltak.append(("🟡", "Yr (lokalt)", f"Kuling lokalt: {vind:.1f} m/s. Vær oppmerksom under utrykninger."))
+            tiltak.append(("🟡", "Yr (lokalt)",
+                f"Kuling lokalt: {vind:.1f} m/s. Økt aktsomhet under kjøring."))
 
     # ── Tensio strømbrudd ─────────────────────────────────────────────────────
     if tensio_pag:
         score += min(len(tensio_pag) * 2, 6)
         kommuner = ", ".join({b.get("kommune","?") for b in tensio_pag})
-        tiltak.append(("🟠", "Tensio", f"{len(tensio_pag)} pågående strømbrudd ({kommuner}). Sjekk at aggregat er klart og drivstoff er fylt. Kontakt Tensio for varighet."))
+        tiltak.append(("🟠", "Tensio",
+            f"{len(tensio_pag)} pågående strømbrudd ({kommuner}). "
+            "Sjekk at aggregat på depot er klart og fylt med drivstoff. "
+            "Vurder økt tilgjengelighet for personell i berørte kommuner."))
     if tensio_plan:
-        tiltak.append(("🟡", "Tensio", f"{len(tensio_plan)} planlagte strømbrudd kommende dager. Forbered nødstrøm."))
+        tiltak.append(("🟡", "Tensio",
+            f"{len(tensio_plan)} planlagte strømbrudd kommende dager. Forbered nødstrøm."))
 
     # ── Akutte avvik ──────────────────────────────────────────────────────────
     if akutte_avvik:
         score += len(akutte_avvik)
-        tiltak.append(("🟠", "Avvik", f"{len(akutte_avvik)} ubehandlede akutte avvik i systemet. Følges opp før neste aksjon."))
+        tiltak.append(("🟠", "Avvik",
+            f"{len(akutte_avvik)} ubehandlede akutte avvik. Disse bør lukkes før neste aksjon."))
 
-    # ── Anbefalt nivå ─────────────────────────────────────────────────────────
-    if score >= 6:
+    # ── Anbefalt nivå (NF Trøndelag-terskel) ──────────────────────────────────
+    if har_rodt_varsel or score >= 7:
         anbefalt = "🔴 Rød / Høy beredskap"
-    elif score >= 3:
+    elif har_oransje_varsel or score >= 3:
         anbefalt = "🟡 Forhøyet Beredskap"
     else:
         anbefalt = "🟢 Normal Beredskap"
 
-    # ── Generelle råd hvis ingen varsler ─────────────────────────────────────
-    if not tiltak:
-        tiltak.append(("🟢", "Status", "Ingen aktive varsler eller hendelser. Normal beredskap er tilstrekkelig."))
+    # ── Nivå-spesifikke handlinger ────────────────────────────────────────────
+    if anbefalt == "🔴 Rød / Høy beredskap":
+        tiltak.insert(0, ("🔴", "NF Orkland – Rødt nivå",
+            "Konsuler vaktleder umiddelbart. Rødt nivå skal konfereres med BLPD/NK BLPD. "
+            "Ved beslutning: personell oppfordres til å møte på lokalt depot klar til utrykking. "
+            "Nødnett aktiveres – tilgjengelig personell melder seg i tildelt talegruppe. "
+            "Ambulanser bemannes opp med ambulansepersonell. Varsles med SMS + talemelding via FRR."))
+    elif anbefalt == "🟡 Forhøyet Beredskap":
+        tiltak.insert(0, ("🟡", "NF Orkland – Gult nivå",
+            "Vaktleder kartlegger tilgjengelig personell. "
+            "Mannskapene informeres om årsak og oppfordres til å være klar for alarm. "
+            "Endring varsles via FRR-melding. Begge vaktledere bør vurdere nivåendringen."))
+    else:
+        tiltak.append(("🟢", "NF Orkland – Grønt nivå",
+            "Ingen aktive varsler. Normal drift. Personell varsles på vanlig måte ved behov."))
 
     return score, anbefalt, tiltak
 
