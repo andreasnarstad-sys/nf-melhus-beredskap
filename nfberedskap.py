@@ -895,7 +895,6 @@ elif side == "👤 Registrer deltakelse":
                            "regnr":regnr.strip().upper() if privatbil else "",
                            "vedlegg":vn},DELTAKELSE_HDR)
                 st.session_state["_del_ok"] = navn.strip()
-                st.session_state["_del_privatbil"] = False
             except Exception as e:
                 st.session_state["_del_feil"] = f"Feil ved lagring: {e}"
         st.rerun()
