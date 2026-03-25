@@ -922,17 +922,15 @@ elif side == "👤 Registrer deltakelse":
             st.rerun()
 
     st.write("---")
-    st.subheader("📋 Registreringer i dag")
-    today = datetime.now().strftime('%d.%m.%Y')
+    st.subheader("📋 Registreringer")
     alle_deltakelser = gs_last_liste("deltakelse", DELTAKELSE_FIL)
-    dagens = [r for r in alle_deltakelser if r.get("registrert", "").startswith(today)]
-    if dagens:
-        dfd = pd.DataFrame(dagens)
+    if alle_deltakelser:
+        dfd = pd.DataFrame(alle_deltakelser)
         _dk = {"registrert":"Tidspunkt","navn":"Navn","aksjon":"Aksjon/Sted","tid_ut":"Ut","tid_inn":"Inn"}
         vis = [c for c in _dk if c in dfd.columns]
         st.dataframe(dfd[vis].rename(columns=_dk), use_container_width=True, hide_index=True)
     else:
-        st.caption("Ingen registreringer i dag ennå.")
+        st.caption("Ingen registreringer ennå.")
 
 # SIDE: REGISTRER AVVIK
 # ═══════════════════════════════════════════════════════════════════════════════
