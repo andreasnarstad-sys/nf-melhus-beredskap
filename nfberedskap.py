@@ -1420,9 +1420,12 @@ if side == "🏠 Operativ tavle":
         ks = ("background:rgba(128,128,128,0.15);color:inherit;border:1px solid rgba(128,128,128,0.3);font-size:0.85rem;opacity:0.7;"
               if d['kort'] in ('Ingen','Daglig drift') else
               "background:#cc0000;color:white;border:2px solid #990000;box-shadow:0 2px 8px rgba(200,0,0,0.4);font-size:1rem;")
+        tg = vp.get("talegruppe","") or ""
+        tg_html = (f"<br><span style='font-size:1.1rem;'>📻 Talegruppe: <b>{tg}</b></span>" if tg else "")
         st.markdown(f"<div class='nf-card-blue'><b>📞 Operativ Ledelse:</b><br>"
                     f"<span style='font-size:1.1rem;'>Leder: <b>{d['leder']}</b></span><br>"
                     f"<span style='font-size:1.1rem;'>Vakt-tlf: <b>{d['vakt']}</b></span>"
+                    f"{tg_html}"
                     f"<br><br><div style='display:inline-block;{ks}padding:4px 12px;border-radius:6px;font-weight:bold;'>"
                     f"📋 {d['kort']}</div></div>", unsafe_allow_html=True)
     with c3:
