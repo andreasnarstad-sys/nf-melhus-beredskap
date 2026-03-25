@@ -830,7 +830,7 @@ with st.sidebar:
         "Operativ tavle",
         "Registrer deltakelse",
         "Registrer avvik",
-        "🩹 Skaderegistrering",
+        "Skaderegistrering",
         "Loggføring",
         "Sjekklister",
         "Vaktinstruks",
@@ -1595,8 +1595,8 @@ elif side == "Registrer avvik":
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: SKADEREGISTRERING
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "🩹 Skaderegistrering":
-    st.markdown("<h2>🩹 Skaderegistrering</h2>", unsafe_allow_html=True)
+elif side == "Skaderegistrering":
+    st.markdown("<h2>Skaderegistrering</h2>", unsafe_allow_html=True)
     st.caption("Registrer pasienter behandlet under oppdrag eller sanitetsvakt.")
     _skade_skjema()
 
