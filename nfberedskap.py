@@ -200,7 +200,7 @@ def gs_lagre_liste(tab, fallback_fil, data, headers):
 
 DEFAULTS = {"status":"🟢 Normal Beredskap","beskjed":"Klar til innsats i Melhus.",
             "leder":"Ikke satt","vakt":"9XX XX XXX","kort":"Daglig drift",
-            "logg":"","ekom":"🟢 Normal drift","vei":"🟢 Veinett åpent"}
+            "talegruppe":"","logg":"","ekom":"🟢 Normal drift","vei":"🟢 Veinett åpent"}
 VP_DEFAULTS = {"sted":"","lagleder":"","mannskaper":"","utstyr":"","legevakt":"",
                "sykehus":"","talegruppe":"","tid_fra":"","tid_til":"","notat":"","aktiv":False,"skjul_forside":False}
 
@@ -1420,7 +1420,7 @@ if side == "🏠 Operativ tavle":
         ks = ("background:rgba(128,128,128,0.15);color:inherit;border:1px solid rgba(128,128,128,0.3);font-size:0.85rem;opacity:0.7;"
               if d['kort'] in ('Ingen','Daglig drift') else
               "background:#cc0000;color:white;border:2px solid #990000;box-shadow:0 2px 8px rgba(200,0,0,0.4);font-size:1rem;")
-        tg = vp.get("talegruppe","") or ""
+        tg = d.get("talegruppe","") or ""
         tg_html = (f"<br><span style='font-size:1.1rem;'>📻 Talegruppe: <b>{tg}</b></span>" if tg else "")
         st.markdown(f"<div class='nf-card-blue'><b>📞 Operativ Ledelse:</b><br>"
                     f"<span style='font-size:1.1rem;'>Leder: <b>{d['leder']}</b></span><br>"
@@ -2091,7 +2091,8 @@ Nåværende score: **{score} poeng**
             with a2:
                 nl=st.text_input("Leder",value=d['leder'])
                 nv=st.text_input("Vakt-tlf",value=d['vakt'])
-                nlog=st.text_area("Operativ logg",value=d['logg'],height=130)
+                ntg=st.text_input("📻 Talegruppe(r) i bruk",value=d.get('talegruppe',''),placeholder="f.eks. TG Melhus 1, TG Redning")
+                nlog=st.text_area("Operativ logg",value=d['logg'],height=100)
             st.write("**📡 Infrastruktur**")
             a3,a4=st.columns(2)
             with a3:
@@ -2101,7 +2102,7 @@ Nåværende score: **{score} poeng**
                 vev=["🟢 Veinett åpent","🟡 Lokale stengninger","🔴 Kritiske brudd / Isolerte bygder"]
                 nve=st.selectbox("Vei",vev,index=vev.index(d['vei']))
             if st.button("💾 Lagre beredskapsstatus", type="primary"):
-                gs_lagre_json("beredskap",FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"logg":nlog,"ekom":ne,"vei":nve})
+                gs_lagre_json("beredskap",FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"talegruppe":ntg,"logg":nlog,"ekom":ne,"vei":nve})
                 st.toast("✅ Lagret!",icon="💾"); st.rerun()
 
         # ── Tab 2: Vaktinstruks ──────────────────────────────────────────────
