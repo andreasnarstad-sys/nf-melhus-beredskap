@@ -68,6 +68,8 @@ LOGG_HDR       = ["id","tidspunkt","forfatter","gradering","tekst"]
 _GS_BOOL   = {"vaktplan":["aktiv","skjul_forside"],
                "avvik":["umiddelbar_oppfolging","fulgt_opp"]}
 _GS_JSON   = {"skade":["skadetype","utstyr"],"deltakelse":["vedlegg"]}
+_GS_HDR    = {"deltakelse":DELTAKELSE_HDR,"avvik":AVVIK_HDR,
+              "skade":SKADE_HDR,"logg":LOGG_HDR}
 
 @st.cache_resource
 def _gs_sh():
@@ -111,7 +113,19 @@ def _gs_fetch(tab):
     """Henter alle rader fra et ark – cachet i 12 sek for å begrense API-kall."""
     ws = _gs_ws(tab)
     if ws is None: return None
-    try: return ws.get_all_records()
+    try:
+        rows = ws.get_all_values()
+        if not rows: return []
+        hdrs = _GS_HDR.get(tab)
+        # Hvis første rad er korrekte headers – bruk dem; ellers behandle alt som data
+        if hdrs and rows[0] == hdrs:
+            return [dict(zip(hdrs, r)) for r in rows[1:] if any(r)]
+        elif hdrs:
+            # Første rad er feil (gammel data / ingen header) – alle rader er data
+            return [dict(zip(hdrs, r)) for r in rows if any(r)]
+        else:
+            # Fallback for ark uten kjent header (beredskap, vaktplan)
+            return [dict(zip(rows[0], r)) for r in rows[1:] if any(r)]
     except: return None
 
 def _gs_invalidate():
@@ -150,7 +164,16 @@ def gs_append(tab, fallback_fil, row_dict, headers):
         lst = last_liste(fallback_fil); lst.append(row_dict); lagre_liste(fallback_fil, lst); return
     try:
         existing = ws.get_all_values()
-        if not existing: ws.append_row(headers)
+        if not existing or existing[0] != headers:
+            # Tom eller feil header-rad – rydd opp og sett riktige headers
+            if existing and existing[0] != headers:
+                ws.clear()
+                data_rows = existing if existing[0] != headers else existing[1:]
+                ws.append_row(headers)
+                for r in data_rows:
+                    ws.append_row(r, value_input_option="RAW")
+            else:
+                ws.append_row(headers)
         ws.append_row([_gs_ser_val(row_dict.get(h, "")) for h in headers],
                       value_input_option="RAW")
         _gs_invalidate()
