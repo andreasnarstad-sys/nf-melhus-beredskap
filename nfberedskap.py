@@ -112,9 +112,9 @@ def _gs_ser_val(v):
     if isinstance(v, list): return json.dumps(v, ensure_ascii=False)
     return str(v) if v is not None else ""
 
-@st.cache_data(ttl=12)
+@st.cache_data(ttl=60)
 def _gs_fetch(tab):
-    """Henter alle rader fra et ark – cachet i 12 sek for å begrense API-kall."""
+    """Henter alle rader fra et ark – cachet i 60 sek for å begrense API-kall."""
     ws = _gs_ws(tab)
     if ws is None: return None
     try:
@@ -404,7 +404,7 @@ def _parse_politilogg_page(html):
     except: pass
     return []
 
-@st.cache_data(ttl=90)
+@st.cache_data(ttl=300)
 def hent_politilogg(tema=""):
     """Henter politilogg for Trøndelag. Hvis tema er tom, hentes alle viktige kategorier."""
     base = "https://www.politiet.no/politiloggen?distrikt=trondelag"
@@ -446,7 +446,7 @@ def hent_politilogg(tema=""):
 _TENSIO_KOMMUNER = ["melhus","orkland","midtre gauldal","skaun","trondheim","malvik",
                     "klæbu","rissa","ørland","bjugn","agdenes","snillfjord","hitra","frøya"]
 
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=300)
 def hent_tensio_brudd():
     """
     Henter pågående (lag 0=punkt) og planlagte (lag 2=punkt) strømbrudd
@@ -796,11 +796,11 @@ if st.session_state["natt_modus"]:
 
 d            = gs_last_json("beredskap",    FIL,              DEFAULTS)
 vp           = gs_last_json("vaktplan",     VAKTPLAN_FIL,     VP_DEFAULTS)
+# Avvik og skader lastes alltid – brukes til tellere i sidebar
 avvik_liste  = gs_last_liste("avvik",   AVVIK_FIL)
-del_liste    = gs_last_liste("deltakelse", DELTAKELSE_FIL)
 skade_liste  = gs_last_liste("skade",   SKADE_FIL)
-logg_liste   = gs_last_liste("logg",    LOGG_FIL)
 akutte       = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get("fulgt_opp")]
+# Deltakelse og logg lastes kun der de trengs (admin / logg-siden)
 
 # ── SIDEMENY ──────────────────────────────────────────────────────────────────
 with st.sidebar:
