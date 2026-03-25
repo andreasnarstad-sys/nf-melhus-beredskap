@@ -866,9 +866,13 @@ elif side == "👤 Registrer deltakelse":
             with t2: tid_inn=st.text_input("Tid inn",placeholder="16:00")
             opplastet=st.file_uploader("Kvittering / vedlegg",type=["jpg","jpeg","png","pdf"],accept_multiple_files=True)
         st.markdown("---")
-        b1,b2 = st.columns(2)
-        with b1: km_kjort = st.number_input("Kjørte km", min_value=0, step=1, value=0, disabled=not privatbil)
-        with b2: regnr    = st.text_input("Reg.nummer", placeholder="AB 12345", disabled=not privatbil)
+        if privatbil:
+            b1,b2 = st.columns(2)
+            with b1: km_kjort = st.number_input("Kjørte km", min_value=0, step=1, value=0)
+            with b2: regnr    = st.text_input("Reg.nummer", placeholder="AB 12345")
+        else:
+            km_kjort = 0
+            regnr    = ""
         sendt = st.form_submit_button("💾 Registrer deltakelse", use_container_width=True, type="primary")
 
     if sendt:
