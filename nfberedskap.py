@@ -47,7 +47,6 @@ PRISER = {"grunnpris":800,"sanitet":160,"ambulanse_m":300,"mbil":300,"amb_kjt":9
 # ── DATAFILER ────────────────────────────────────────────────────────────────
 
 FIL              = "beredskap_data.json"
-DELTAKELSE_FIL   = "deltakelse_data.json"
 AVVIK_FIL        = "avvik_data.json"
 VAKTPLAN_FIL     = "vaktplan_data.json"
 SKADE_FIL        = "skade_data.json"
@@ -56,7 +55,6 @@ VEDLEGG_MAPPE    = "vedlegg"
 
 # ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
 
-DELTAKELSE_HDR = ["registrert","navn","oppdrag","tid_ut","tid_inn","utlegg_kr","privatbil","km_kjort","regnr","vedlegg"]
 AVVIK_HDR      = ["id","registrert","navn","epost","hendelse","konsekvens",
                    "umiddelbar_oppfolging","fulgt_opp","oppfolging_notat"]
 SKADE_HDR      = ["registrert","innsats","behandler","kjonn","alder","skadetype",
@@ -65,7 +63,7 @@ LOGG_HDR       = ["id","tidspunkt","forfatter","gradering","tekst"]
 
 _GS_BOOL   = {"vaktplan":["aktiv","skjul_forside"],
                "avvik":["umiddelbar_oppfolging","fulgt_opp"]}
-_GS_JSON   = {"skade":["skadetype","utstyr"],"deltakelse":["vedlegg"]}
+_GS_JSON   = {"skade":["skadetype","utstyr"]}
 
 @st.cache_resource
 def _gs_sh():
@@ -616,7 +614,6 @@ if st.session_state["natt_modus"]:
 d            = gs_last_json("beredskap",    FIL,              DEFAULTS)
 vp           = gs_last_json("vaktplan",     VAKTPLAN_FIL,     VP_DEFAULTS)
 avvik_liste  = gs_last_liste("avvik",   AVVIK_FIL)
-del_liste    = gs_last_liste("deltakelse", DELTAKELSE_FIL)
 skade_liste  = gs_last_liste("skade",   SKADE_FIL)
 logg_liste   = gs_last_liste("logg",    LOGG_FIL)
 akutte       = [a for a in avvik_liste if a.get("umiddelbar_oppfolging") and not a.get("fulgt_opp")]
@@ -638,7 +635,6 @@ with st.sidebar:
     st.markdown("---")
     side = st.radio("Navigasjon", [
         "🏠 Operativ tavle",
-        "👤 Registrer deltakelse",
         "⚠️ Registrer avvik",
         "🩹 Skaderegistrering",
         "📝 Loggføring",
@@ -648,8 +644,7 @@ with st.sidebar:
     ], label_visibility="collapsed")
 
     st.markdown("---")
-    m1, m2 = st.columns(2)
-    m1.metric("Deltakelser", len(del_liste))
+    m2 = st.container()
     m2.metric("Avvik", len(avvik_liste),
               delta=f"{len(akutte)} akutte" if akutte else None,
               delta_color="inverse")
@@ -841,73 +836,6 @@ if side == "🏠 Operativ tavle":
     st.markdown(f"<div style='text-align:right;color:#aaa;'><small>Sist lastet: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</small></div>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SIDE: REGISTRER DELTAKELSE
-# ═══════════════════════════════════════════════════════════════════════════════
-elif side == "👤 Registrer deltakelse":
-    st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
-    st.caption("Fyll ut skjemaet etter endt oppdrag eller vakt.")
-
-    if st.session_state.get("_del_ok"):
-        st.success(f"✅ Deltakelse registrert for **{st.session_state.pop('_del_ok')}**")
-    if st.session_state.get("_del_feil"):
-        st.error(st.session_state.pop("_del_feil"))
-
-    k1,k2 = st.columns(2)
-    with k1:
-        navn    = st.text_input("Navn *", key="_del_navn")
-        oppdrag = st.selectbox("Type oppdrag *", ["SAR","Sanitetsvakt","Annen hendelse","Kurs/øvelse"], key="_del_oppdrag")
-        utlegg  = st.number_input("Private utlegg (kr)", min_value=0, step=50, value=0, key="_del_utlegg")
-    with k2:
-        t1,t2=st.columns(2)
-        with t1: tid_ut  = st.text_input("Tid ut",  placeholder="08:00", key="_del_tid_ut")
-        with t2: tid_inn = st.text_input("Tid inn", placeholder="16:00", key="_del_tid_inn")
-        opplastet = st.file_uploader("Kvittering / vedlegg", type=["jpg","jpeg","png","pdf"],
-                                     accept_multiple_files=True, key="_del_vedlegg")
-    st.markdown("---")
-    privatbil = st.checkbox("🚗 Brukte privatbil", key="_del_privatbil")
-    if privatbil:
-        b1,b2 = st.columns(2)
-        with b1: km_kjort = st.number_input("Kjørte km",  min_value=0, step=1, value=0, key="_del_km")
-        with b2: regnr    = st.text_input("Reg.nummer", placeholder="AB 12345", key="_del_regnr")
-    else:
-        km_kjort, regnr = 0, ""
-
-    if st.button("💾 Registrer deltakelse", use_container_width=True, type="primary"):
-        if not navn.strip():
-            st.session_state["_del_feil"] = "Navn er påkrevd."
-        else:
-            try:
-                vn=[]
-                for f in (opplastet or []):
-                    os.makedirs(VEDLEGG_MAPPE, exist_ok=True)
-                    fn=f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{f.name}"
-                    with open(os.path.join(VEDLEGG_MAPPE,fn),"wb") as fp: fp.write(f.read())
-                    vn.append(fn)
-                gs_append("deltakelse",DELTAKELSE_FIL,
-                          {"registrert":datetime.now().strftime('%d.%m.%Y %H:%M'),"navn":navn.strip(),
-                           "oppdrag":oppdrag,"tid_ut":tid_ut.strip(),"tid_inn":tid_inn.strip(),
-                           "utlegg_kr":utlegg,
-                           "privatbil":"Ja" if privatbil else "Nei",
-                           "km_kjort":km_kjort if privatbil else 0,
-                           "regnr":regnr.strip().upper() if privatbil else "",
-                           "vedlegg":vn},DELTAKELSE_HDR)
-                st.session_state["_del_ok"] = navn.strip()
-            except Exception as e:
-                st.session_state["_del_feil"] = f"Feil ved lagring: {e}"
-        st.rerun()
-
-    st.write("---"); st.subheader("📋 Registrerte deltakelser")
-    alle_del = gs_last_liste("deltakelse", DELTAKELSE_FIL)
-    if alle_del:
-        _kol_navn={"registrert":"Tidspunkt","navn":"Navn","oppdrag":"Oppdrag","tid_ut":"Tid ut",
-                   "tid_inn":"Tid inn","utlegg_kr":"Utlegg (kr)","privatbil":"Privatbil",
-                   "km_kjort":"Km","regnr":"Reg.nr"}
-        dfd=pd.DataFrame(alle_del)
-        vis_kol=[c for c in _kol_navn if c in dfd.columns]
-        st.dataframe(dfd[vis_kol].rename(columns=_kol_navn), use_container_width=True, hide_index=True)
-    else:
-        st.caption("Ingen deltakelser registrert ennå.")
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: REGISTRER AVVIK
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1609,7 +1537,7 @@ elif side == "⚙️ Administrasjon":
                 st.markdown(lampe(politilogg_ok, "Politilogg (politiet.no)"), unsafe_allow_html=True)
 
         st.write("")
-        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
+        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik"])
 
         # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
         with adm_tabs[0]:
@@ -1712,14 +1640,4 @@ elif side == "⚙️ Administrasjon":
                 if endret: gs_lagre_liste("avvik",AVVIK_FIL,avvik_liste,AVVIK_HDR); st.rerun()
 
         # ── Tab 4: Deltakelser ───────────────────────────────────────────────
-        with adm_tabs[3]:
-            if del_liste:
-                _dk={"registrert":"Tidspunkt","navn":"Navn","oppdrag":"Oppdrag","tid_ut":"Tid ut",
-                     "tid_inn":"Tid inn","utlegg_kr":"Utlegg (kr)","privatbil":"Privatbil",
-                     "km_kjort":"Km","regnr":"Reg.nr"}
-                dfd=pd.DataFrame(del_liste)
-                vis=[c for c in _dk if c in dfd.columns]
-                st.dataframe(dfd[vis].rename(columns=_dk),use_container_width=True,hide_index=True)
-            else:
-                st.info("Ingen deltakelser registrert ennå.")
 
