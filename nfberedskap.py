@@ -917,6 +917,19 @@ elif side == "👤 Registrer deltakelse":
             st.error(f"Feil ved lagring: {e}")
         st.rerun()
 
+    st.write("---")
+    st.subheader("📋 Registreringer i dag")
+    today = datetime.now().strftime('%d.%m.%Y')
+    alle_deltakelser = gs_last_liste("deltakelse", DELTAKELSE_FIL)
+    dagens = [r for r in alle_deltakelser if r.get("registrert", "").startswith(today)]
+    if dagens:
+        dfd = pd.DataFrame(dagens)
+        _dk = {"registrert":"Tidspunkt","navn":"Navn","aksjon":"Aksjon/Sted","tid_ut":"Ut","tid_inn":"Inn"}
+        vis = [c for c in _dk if c in dfd.columns]
+        st.dataframe(dfd[vis].rename(columns=_dk), use_container_width=True, hide_index=True)
+    else:
+        st.caption("Ingen registreringer i dag ennå.")
+
 # SIDE: REGISTRER AVVIK
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "⚠️ Registrer avvik":
