@@ -385,28 +385,62 @@ POLITILOGG_FARGER = {
     "Orden":"#9c27b0","Narkotika":"#795548","Vold":"#e91e63",
 }
 
-@st.cache_data(ttl=90)
-def hent_politilogg(tema=""):
-    url = "https://www.politiet.no/politiloggen?distrikt=trondelag"
-    if tema: url += f"&tema={tema}"
+def _parse_politilogg_page(html):
+    """Henter hendelsesliste fra __NEXT_DATA__ i en politilogg-side."""
+    m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html, re.DOTALL)
+    if not m: return []
     try:
-        r = requests.get(url, headers=STD_HEADERS, timeout=15)
-        r.raise_for_status()
-        m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', r.text, re.DOTALL)
-        if not m: return []
         nd = json.loads(m.group(1))
         pp = nd.get("props",{}).get("pageProps",{})
         for key in ["messageThreads","messages","incidents","data","items","logs","events"]:
             if key in pp and isinstance(pp[key], list):
-                return pp[key][:30]
-        # Recurse one level deeper
+                return pp[key]
         for v in pp.values():
             if isinstance(v, dict):
                 for key in ["messageThreads","messages","incidents","data","items"]:
                     if key in v and isinstance(v[key], list):
-                        return v[key][:30]
-        return []
-    except: return []
+                        return v[key]
+    except: pass
+    return []
+
+@st.cache_data(ttl=90)
+def hent_politilogg(tema=""):
+    """Henter politilogg for Trøndelag. Hvis tema er tom, hentes alle viktige kategorier."""
+    base = "https://www.politiet.no/politiloggen?distrikt=trondelag"
+
+    def _hent(t=""):
+        url = base if not t else f"{base}&tema={requests.utils.quote(t)}"
+        try:
+            r = requests.get(url, headers=STD_HEADERS, timeout=15)
+            r.raise_for_status()
+            return _parse_politilogg_page(r.text)
+        except: return []
+
+    if tema:
+        return _hent(tema)[:30]
+
+    # Hent alle + spesifikke kategorier som ofte mangler i default-visningen
+    alle = _hent("")
+    for kat in ["Redning", "Savnet", "Vær"]:
+        kat_data = _hent(kat)
+        # Legg til oppføringer som ikke allerede er i lista (dedup på id eller tid+tekst)
+        eksisterende_ids = {
+            h.get("id") or h.get("externalId") or (str(h.get("createdOn","")) + str(h.get("municipality","")))
+            for h in alle
+        }
+        for h in kat_data:
+            hid = h.get("id") or h.get("externalId") or (str(h.get("createdOn","")) + str(h.get("municipality","")))
+            if hid not in eksisterende_ids:
+                alle.append(h)
+                eksisterende_ids.add(hid)
+
+    # Sorter på tidspunkt (nyeste først)
+    def _tid(h):
+        t = h.get("createdOn") or h.get("time") or h.get("timestamp") or ""
+        try: return str(t)
+        except: return ""
+    alle.sort(key=_tid, reverse=True)
+    return alle[:40]
 
 _TENSIO_KOMMUNER = ["melhus","orkland","midtre gauldal","skaun","trondheim","malvik",
                     "klæbu","rissa","ørland","bjugn","agdenes","snillfjord","hitra","frøya"]
@@ -497,7 +531,6 @@ def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, aku
                 "Oransje farevarsel tilsier gul beredskap iht. NF-retningslinjer. "
                 "Vaktleder kartlegger tilgjengelig personell og varsler via FRR."))
         elif nivaa == 2:
-            score += 1
             tiltak.append(("🟡", "Varsom",
                 f"Nivå {nivaa} snøskredvarsel – {omr}. Følg utviklingen på varsom.no."))
 
@@ -528,7 +561,6 @@ def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, aku
                 f"Oransje varsel tilsier gul beredskap. Anbefalt tiltak: {gul_tiltak}. "
                 "Vaktleder kartlegger personell og varsler via FRR-melding."))
         elif nivaa == 2:
-            score += 1
             tiltak.append(("🟡", "Yr/MET",
                 f"Gult {vtype}-varsel – {omr}. Normal beredskap, men følg utviklingen."))
 
@@ -571,18 +603,18 @@ def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, aku
 
     # ── Nivå-spesifikke handlinger ────────────────────────────────────────────
     if anbefalt == "🔴 Rød / Høy beredskap":
-        tiltak.insert(0, ("🔴", "NF Orkland – Rødt nivå",
+        tiltak.insert(0, ("🔴", "Norsk Folkehjelp Melhus – Rødt nivå",
             "BLPD informeres umiddelbart. "
             "Personell oppfordres til å møte på lokalt depot klar til utrykking. "
             "Nødnett aktiveres – tilgjengelig personell melder seg i tildelt talegruppe. "
             "Ambulanser bemannes opp med ambulansepersonell. Varsles med SMS + talemelding via FRR."))
     elif anbefalt == "🟡 Forhøyet Beredskap":
-        tiltak.insert(0, ("🟡", "NF Orkland – Gult nivå",
+        tiltak.insert(0, ("🟡", "Norsk Folkehjelp Melhus – Gult nivå",
             "Beredskapsleder kartlegger tilgjengelig personell. "
             "Mannskapene informeres om årsak og oppfordres til å være klar for alarm. "
             "Endring varsles via FRR-melding."))
     else:
-        tiltak.append(("🟢", "NF Orkland – Grønt nivå",
+        tiltak.append(("🟢", "Norsk Folkehjelp Melhus – Grønt nivå",
             "Ingen aktive varsler. Normal drift. Personell varsles på vanlig måte ved behov."))
 
     return score, anbefalt, tiltak
@@ -1109,7 +1141,7 @@ def _logg_skjema():
 
         pm_tekst = f"""PRESSEMELDING: Norsk Folkehjelp bistår {pm_hvem_bistaar or 'nødetatene'}{f' i {pm_sted}' if pm_sted else ''}
 
-{by_str}, {dato_str}: Norsk Folkehjelp Melhus og Orkland er kalt ut på oppdrag{f' fra {pm_oppdragsgiver}' if pm_oppdragsgiver else ''} for å bistå ved {pm_hendelse or '[beskriv hendelse]'}{f' på {pm_sted}' if pm_sted else ''}. Våre mannskaper ble varslet {pm_tid}, og vi var raskt på plass med våre første ressurser.
+{by_str}, {dato_str}: Norsk Folkehjelp Melhus er kalt ut på oppdrag{f' fra {pm_oppdragsgiver}' if pm_oppdragsgiver else ''} for å bistå ved {pm_hendelse or '[beskriv hendelse]'}{f' på {pm_sted}' if pm_sted else ''}. Våre mannskaper ble varslet {pm_tid}, og vi var raskt på plass med våre første ressurser.
 
 SITUASJON OG VÅR ROLLE I FELT
 Akkurat nå har Norsk Folkehjelp {pm_antall} frivillige mannskaper i aktiv innsats.{f' Vår hovedoppgave i denne fasen av aksjonen er å {pm_oppgave}' if pm_oppgave else ''}
@@ -1125,7 +1157,7 @@ VIKTIG INFORMASJON OM HENDELSEN
 Norsk Folkehjelp er en støtteressurs for myndighetene. For overordnet status på hendelsens omfang, årsakssammenhenger, eller opplysninger om savnede/skadde, henviser vi direkte til {pm_henvis or 'Politiets innsatsleder eller AMK'}.
 
 {f'''KUN FOR MEDIA – PRESSEKONTAKT:
-{pm_kontakt} – Norsk Folkehjelp Melhus og Orkland''' if pm_kontakt else ''}
+{pm_kontakt} – Norsk Folkehjelp Melhus''' if pm_kontakt else ''}
 
 [Slutt på pressemelding]"""
 
@@ -1144,7 +1176,7 @@ Norsk Folkehjelp er en støtteressurs for myndighetene. For overordnet status p�
 
             # Eksport som HTML
             pm_html = f"""<!DOCTYPE html><html lang="no"><head><meta charset="UTF-8">
-<title>Pressemelding – NF Melhus og Orkland</title>
+<title>Pressemelding – NF Melhus</title>
 <style>body{{font-family:Georgia,serif;max-width:700px;margin:50px auto;color:#222;line-height:1.8;padding:0 20px}}
 h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
 .meta{{color:#666;font-size:0.9rem;margin-bottom:24px}}
@@ -1152,7 +1184,7 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
 .footer{{margin-top:32px;border-top:1px solid #ddd;padding-top:16px;font-size:0.85rem;color:#666}}
 @media print{{body{{margin:20px}}}}</style></head><body>
 <h1>Pressemelding</h1>
-<div class="meta">Norsk Folkehjelp Melhus og Orkland · {dato_str}</div>
+<div class="meta">Norsk Folkehjelp Melhus · {dato_str}</div>
 <pre style="font-family:Georgia,serif;white-space:pre-wrap">{pm_tekst}</pre>
 </body></html>"""
             st.download_button("🌐 Last ned som HTML (hjemmeside)", data=pm_html.encode("utf-8"),
@@ -1433,7 +1465,7 @@ if side == "🏠 Operativ tavle":
     pl_siste = hent_politilogg("")
     if pl_siste:
         pl_linjer = ""
-        for h in pl_siste[:5]:
+        for h in pl_siste[:8]:
             kat  = str(h.get("category") or h.get("tema") or h.get("type") or h.get("kategori") or "Annet").strip().capitalize()
             kom  = h.get("municipality") or h.get("kommune") or h.get("location") or h.get("sted") or "–"
             tid_r = h.get("createdOn") or h.get("time") or h.get("timestamp") or h.get("dato") or ""
@@ -2016,6 +2048,28 @@ elif side == "⚙️ Administrasjon":
                 </div>""", unsafe_allow_html=True)
 
             st.markdown("---")
+            with st.expander("📊 Poengforklaring – manuell vurdering"):
+                st.markdown(f"""
+| Kilde | Hendelse | Poeng |
+|---|---|---|
+| Varsom / NVE | Rødt farevarsel (nivå 4+) | **4 poeng** + utløser rød |
+| Varsom / NVE | Oransje farevarsel (nivå 3) | **3 poeng** + utløser gul |
+| Varsom / NVE | Gult farevarsel (nivå 2) | 0 poeng (kun info) |
+| Yr / MET | Rødt varsel (nivå 4+) | **4 poeng** + utløser rød |
+| Yr / MET | Oransje varsel (nivå 3) | **3 poeng** + utløser gul |
+| Yr / MET | Gult varsel (nivå 2) | 0 poeng (kun info) |
+| Lokal vind | Sterk storm ≥ 20 m/s | **2 poeng** |
+| Lokal vind | Kuling ≥ 13 m/s | **1 poeng** |
+| Tensio | Pågående strømbrudd | **2 poeng/brudd** (maks 6) |
+| Avvik | Ubehandlet akutt avvik | **1 poeng/avvik** |
+
+**Terskler:**
+- 🔴 **Rød beredskap**: Rødt varsel (NVE/MET) _eller_ totalscore ≥ 7 poeng
+- 🟡 **Gul beredskap**: Oransje varsel (NVE/MET) _eller_ totalscore ≥ 3 poeng
+- 🟢 **Normal**: Score < 3 og ingen oransje/rødt varsler
+
+Nåværende score: **{score} poeng**
+                """)
             st.caption(f"Analysen oppdateres automatisk. Sist kjørt: {datetime.now().strftime('%H:%M:%S')} · Basert på {len(_nve)} NVE-varsler, {len(_met)} MET-varsler, {len(_tpag)} Tensio-brudd.")
             if st.button("🔄 Oppdater analyse", use_container_width=True):
                 hent_nve_varsler.clear(); hent_met_varsler.clear()
@@ -2029,7 +2083,7 @@ elif side == "⚙️ Administrasjon":
                 sv=["🟢 Normal Beredskap","🟡 Forhøyet Beredskap","🔴 Rød / Høy beredskap"]
                 ns=st.selectbox("Beredskapsnivå",sv,index=sv.index(d['status']))
                 nb=st.text_area("Beskjed til stab",value=d['beskjed'])
-                kv=["Ingen","Daglig drift","Snøskred","Flom","Jordras","Ekom-bortfall","Isolasjon / Evakuering","Søk/Redning"]
+                kv=["Ingen","Daglig drift","Snøskred","Flom","Jordras","Ekom-bortfall","Isolasjon / Evakuering","Søk/Redning","Ekstremvær"]
                 nk=st.selectbox("Tiltakskort",kv,index=kv.index(d['kort']))
             with a2:
                 nl=st.text_input("Leder",value=d['leder'])
