@@ -1391,7 +1391,17 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
 # ═══════════════════════════════════════════════════════════════════════════════
 if side == "Operativ tavle":
 
-    st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp Melhus</h2>", unsafe_allow_html=True)
+    st.markdown("""
+<div style='text-align:center;padding:18px 0 10px 0;'>
+  <div style='display:inline-flex;align-items:center;gap:14px;'>
+    <span style='font-size:2.2rem;'>🚑</span>
+    <div style='text-align:left;'>
+      <div style='font-size:1.6rem;font-weight:700;color:#cc0000;letter-spacing:0.5px;line-height:1.1;'>Norsk Folkehjelp</div>
+      <div style='font-size:1.1rem;font-weight:400;color:#888;letter-spacing:2px;text-transform:uppercase;'>Melhus</div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
     # Status-banner
     st.markdown(f"""<div style="background:{bg};padding:20px;border-radius:15px;
