@@ -58,7 +58,7 @@ VEDLEGG_MAPPE    = "vedlegg"
 
 DELTAKELSE_HDR = ["id","registrert","navn","tid_ut","tid_inn","aksjon",
                   "utlegg_kr","privatbil","km_privatbil","regnr",
-                  "lagsutstyr","mannskapsbil_km","ambulanse_km","vedlegg"]
+                  "mannskapsbil_km","ambulanse_km","vedlegg"]
 AVVIK_HDR      = ["id","registrert","navn","epost","hendelse","konsekvens",
                    "umiddelbar_oppfolging","fulgt_opp","oppfolging_notat"]
 SKADE_HDR      = ["registrert","innsats","behandler","kjonn","alder","skadetype",
@@ -874,8 +874,6 @@ elif side == "👤 Registrer deltakelse":
     else:
         d_km_priv, d_regnr = 0, ""
 
-    d_lagsutstyr = st.checkbox("🎒 Lagsutstyr brukt", key="_d_lagutstyr")
-
     d_mnnskap = st.checkbox("🚒 Mannskapsbil", key="_d_mnnskap")
     if d_mnnskap:
         d_km_mnnskap = st.number_input("Km – Mannskapsbil", min_value=0, step=1, key="_d_km_mnnskap")
@@ -908,7 +906,6 @@ elif side == "👤 Registrer deltakelse":
             "privatbil": "Ja" if d_privatbil else "Nei",
             "km_privatbil": d_km_priv,
             "regnr": d_regnr.strip().upper(),
-            "lagsutstyr": "Ja" if d_lagsutstyr else "Nei",
             "mannskapsbil_km": d_km_mnnskap,
             "ambulanse_km": d_km_amb,
             "vedlegg": vn,
@@ -1731,7 +1728,7 @@ elif side == "⚙️ Administrasjon":
             else:
                 _dk = {"registrert":"Tidspunkt","navn":"Navn","tid_ut":"Ut","tid_inn":"Inn",
                        "aksjon":"Aksjon","utlegg_kr":"Utlegg kr","privatbil":"Privatbil",
-                       "km_privatbil":"Km priv","regnr":"Reg.nr","lagsutstyr":"Lagsutstyr",
+                       "km_privatbil":"Km priv","regnr":"Reg.nr",
                        "mannskapsbil_km":"Km mnnskap","ambulanse_km":"Km amb"}
                 dfd = pd.DataFrame(del_liste)
                 vis = [c for c in _dk if c in dfd.columns]
