@@ -502,9 +502,54 @@ def hent_tensio_brudd():
         pass
     return pagaende, planlagte
 
+_VEG_KOMMUNER = ["melhus", "orkland", "midtre gauldal", "skaun", "trondheim"]
+_VEG_KRITISKE  = ["stengt","sperret","kolonnekjøring","ulykke","flom","skred","ras","uvær","glatt","brann","savnet"]
+
+@st.cache_data(ttl=180)
+def hent_vegmeldinger():
+    """
+    Henter aktive trafikksituasjoner fra Statens vegvesen NVDB v3 API.
+    Bounding box dekker Melhus, Orkland, Skaun og Midtre Gauldal.
+    """
+    try:
+        bbox = "9.3,62.7,11.1,63.8"
+        hdrs = {
+            "X-Client-Name": "NFBeredskap-Melhus",
+            "Accept": "application/vnd.vegvesen.nvdb-v3-rev1+json",
+            "User-Agent": "NorskFolkehjelpBeredskap/1.0",
+        }
+        r = requests.get(
+            f"https://nvdbapiles-v3.atlas.vegvesen.no/situasjon?kartutsnitt={bbox}&antall=50",
+            headers=hdrs, timeout=10
+        )
+        r.raise_for_status()
+        data = r.json()
+        meldinger = []
+        for obj in data.get("objekter", []):
+            egn  = {e["navn"]: e.get("verdi","") for e in obj.get("egenskaper",[])}
+            vtype = str(egn.get("Type situasjon","") or egn.get("Hendelsestype","") or "Hendelse")
+            besk  = str(egn.get("Beskrivelse","") or egn.get("Informasjon","") or "")
+            komm  = [str(k) for k in obj.get("lokasjon",{}).get("kommuner",[])]
+            vei   = str(egn.get("Veg","") or "")
+            er_lokal   = not komm or any(
+                any(k.lower() in c.lower() for k in _VEG_KOMMUNER) for c in komm
+            )
+            er_kritisk = any(k in (vtype+besk).lower() for k in _VEG_KRITISKE)
+            if not er_lokal: continue
+            meldinger.append({
+                "type":     vtype,
+                "besk":     besk,
+                "vei":      vei,
+                "kommuner": ", ".join(komm) if komm else "–",
+                "kritisk":  er_kritisk,
+            })
+        return meldinger
+    except Exception:
+        return []
+
 # ── HTML-EKSPORT ─────────────────────────────────────────────────────────────
 
-def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, akutte_avvik, temp, vind):
+def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, akutte_avvik, temp, vind, vegmeldinger=None):
     """
     Regelbasert beredskapsanalyse basert på NF Trøndelags beredskapsnivå-dokument.
     Terskel: oransje NVE/MET-varsel → gul beredskap, rødt NVE/MET-varsel → vurder rød.
@@ -587,6 +632,23 @@ def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, aku
     if tensio_plan:
         tiltak.append(("🟡", "Tensio",
             f"{len(tensio_plan)} planlagte strømbrudd kommende dager. Forbered nødstrøm."))
+
+    # ── Vegmeldinger (Statens vegvesen) ───────────────────────────────────────
+    if vegmeldinger:
+        kritiske = [m for m in vegmeldinger if m.get("kritisk")]
+        andre    = [m for m in vegmeldinger if not m.get("kritisk")]
+        if kritiske:
+            score += min(len(kritiske), 3)
+            oppsummering = "; ".join(
+                f"{m['type']} – {m['vei'] or m['kommuner']}" for m in kritiske[:3]
+            )
+            tiltak.append(("🟠", "Vegvesen",
+                f"{len(kritiske)} kritisk vegmelding(er): {oppsummering}. "
+                "Sjekk fremkommelighet mot innsatsområde. "
+                "Vurder alternative ruter og informer sjåfører."))
+        if andre:
+            tiltak.append(("🟡", "Vegvesen",
+                f"{len(andre)} aktiv(e) vegmelding(er) i nærområdet. Følg med på vegtrafikksentralen."))
 
     # ── Akutte avvik ──────────────────────────────────────────────────────────
     if akutte_avvik:
@@ -2042,14 +2104,15 @@ elif side == "Administrasjon":
 
         # ── Tab 0: Beredskapsanalyse ─────────────────────────────────────────
         with adm_tabs[0]:
-            st.caption("Automatisk analyse basert på live-data fra Varsom, Yr/MET, Tensio og egne avvik.")
+            st.caption("Automatisk analyse basert på live-data fra Varsom, Yr/MET, Tensio, Vegvesen og egne avvik.")
             with st.spinner("Henter data..."):
                 _nve  = hent_nve_varsler(st.session_state.get("region_valg","Trøndelag (Melhus)"))
                 _met  = hent_met_varsler(st.session_state.get("region_valg","Trøndelag (Melhus)"))
                 _temp, _vind, _ = hent_lokal_vaer()
                 _tpag, _tplan   = hent_tensio_brudd()
+                _veg            = hent_vegmeldinger()
             score, anbefalt, tiltak = analyser_beredskap(
-                d, _nve, _met, _tpag, _tplan, akutte, _temp, _vind)
+                d, _nve, _met, _tpag, _tplan, akutte, _temp, _vind, _veg)
 
             # Anbefalt nivå
             niva_farge = {"🟢 Normal Beredskap":"#28a745","🟡 Forhøyet Beredskap":"#ffc107","🔴 Rød / Høy beredskap":"#dc3545"}
@@ -2098,10 +2161,11 @@ elif side == "Administrasjon":
 
 Nåværende score: **{score} poeng**
                 """)
-            st.caption(f"Analysen oppdateres automatisk. Sist kjørt: {datetime.now().strftime('%H:%M:%S')} · Basert på {len(_nve)} NVE-varsler, {len(_met)} MET-varsler, {len(_tpag)} Tensio-brudd.")
+            st.caption(f"Analysen oppdateres automatisk. Sist kjørt: {datetime.now().strftime('%H:%M:%S')} · {len(_nve)} NVE-varsler · {len(_met)} MET-varsler · {len(_tpag)} Tensio-brudd · {len(_veg)} vegmeldinger")
             if st.button("🔄 Oppdater analyse", use_container_width=True):
                 hent_nve_varsler.clear(); hent_met_varsler.clear()
                 hent_lokal_vaer.clear(); hent_tensio_brudd.clear()
+                hent_vegmeldinger.clear()
                 st.rerun()
 
         # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
