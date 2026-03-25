@@ -1393,13 +1393,7 @@ if side == "Operativ tavle":
 
     st.markdown("""
 <div style='text-align:center;padding:18px 0 10px 0;'>
-  <div style='display:inline-flex;align-items:center;gap:14px;'>
-    <span style='font-size:2.2rem;'>🚑</span>
-    <div style='text-align:left;'>
-      <div style='font-size:1.6rem;font-weight:700;color:#cc0000;letter-spacing:0.5px;line-height:1.1;'>Norsk Folkehjelp</div>
-      <div style='font-size:1.1rem;font-weight:400;color:#888;letter-spacing:2px;text-transform:uppercase;'>Melhus</div>
-    </div>
-  </div>
+  <div style='font-size:2.4rem;font-weight:800;color:#2e7d32;letter-spacing:0.5px;line-height:1.1;'>Norsk Folkehjelp Melhus</div>
 </div>
 """, unsafe_allow_html=True)
 
