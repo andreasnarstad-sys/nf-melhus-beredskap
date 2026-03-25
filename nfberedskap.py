@@ -572,15 +572,15 @@ def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, aku
     # ── Nivå-spesifikke handlinger ────────────────────────────────────────────
     if anbefalt == "🔴 Rød / Høy beredskap":
         tiltak.insert(0, ("🔴", "NF Orkland – Rødt nivå",
-            "Konsuler vaktleder umiddelbart. Rødt nivå skal konfereres med BLPD/NK BLPD. "
-            "Ved beslutning: personell oppfordres til å møte på lokalt depot klar til utrykking. "
+            "BLPD informeres umiddelbart. "
+            "Personell oppfordres til å møte på lokalt depot klar til utrykking. "
             "Nødnett aktiveres – tilgjengelig personell melder seg i tildelt talegruppe. "
             "Ambulanser bemannes opp med ambulansepersonell. Varsles med SMS + talemelding via FRR."))
     elif anbefalt == "🟡 Forhøyet Beredskap":
         tiltak.insert(0, ("🟡", "NF Orkland – Gult nivå",
-            "Vaktleder kartlegger tilgjengelig personell. "
+            "Beredskapsleder kartlegger tilgjengelig personell. "
             "Mannskapene informeres om årsak og oppfordres til å være klar for alarm. "
-            "Endring varsles via FRR-melding. Begge vaktledere bør vurdere nivåendringen."))
+            "Endring varsles via FRR-melding."))
     else:
         tiltak.append(("🟢", "NF Orkland – Grønt nivå",
             "Ingen aktive varsler. Normal drift. Personell varsles på vanlig måte ved behov."))
