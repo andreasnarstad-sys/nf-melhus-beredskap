@@ -469,6 +469,88 @@ def hent_tensio_brudd():
 
 # ── HTML-EKSPORT ─────────────────────────────────────────────────────────────
 
+def analyser_beredskap(d, nve_varsler, met_varsler, tensio_pag, tensio_plan, akutte_avvik, temp, vind):
+    """Regelbasert beredskapsanalyse. Returnerer (score, anbefalte_nivå, tiltak_liste)."""
+    score = 0
+    tiltak = []
+
+    # ── NVE / Varsom ──────────────────────────────────────────────────────────
+    for v in nve_varsler.values():
+        nivaa = v.get("Nivå", 0)
+        vtype = v.get("Type", "")
+        omr   = v.get("Område", "")
+        if nivaa >= 4:
+            score += 4
+            tiltak.append(("🔴", "Varsom", f"Nivå {nivaa} snøskredvarsel – {omr}. Unngå skredfarlig terreng. Sjekk at skredprosedyrer er kjent."))
+        elif nivaa == 3:
+            score += 2
+            tiltak.append(("🟠", "Varsom", f"Nivå {nivaa} snøskredvarsel – {omr}. Vær oppmerksom på farlig terreng under aksjoner."))
+        elif nivaa == 2:
+            score += 1
+            tiltak.append(("🟡", "Varsom", f"Nivå {nivaa} snøskredvarsel – {omr}. Hold deg oppdatert på varsom.no."))
+
+    # ── MET / Yr ──────────────────────────────────────────────────────────────
+    for v in met_varsler.values():
+        nivaa = v.get("Nivå", 0)
+        vtype = v.get("Type", "")
+        omr   = v.get("Område", "")
+        if nivaa >= 4:
+            score += 4
+            if "STORM" in vtype or "VIND" in vtype:
+                tiltak.append(("🔴", "Yr/MET", f"Rødt {vtype}-varsel – {omr}. Sikre utstyr. Forbered støtte til nødetater. Vurder å etablere KO."))
+            elif "FLOM" in vtype:
+                tiltak.append(("🔴", "Yr/MET", f"Rødt FLOM-varsel – {omr}. Sjekk tilgjengelighet til lavereliggende områder. Forbered evakueringsstøtte."))
+            else:
+                tiltak.append(("🔴", "Yr/MET", f"Rødt {vtype}-varsel – {omr}. Økt beredskap anbefales."))
+        elif nivaa == 3:
+            score += 2
+            if "STORM" in vtype or "VIND" in vtype:
+                tiltak.append(("🟠", "Yr/MET", f"Oransje {vtype}-varsel – {omr}. Hold mannskaper tilgjengelig. Sjekk at kjøretøy er operative."))
+            elif "FLOM" in vtype:
+                tiltak.append(("🟠", "Yr/MET", f"Oransje FLOM-varsel – {omr}. Følg med på vannstand. Ha evakueringsutstyr klart."))
+            else:
+                tiltak.append(("🟠", "Yr/MET", f"Oransje {vtype}-varsel – {omr}. Vurder forhøyet beredskap."))
+        elif nivaa == 2:
+            score += 1
+            tiltak.append(("🟡", "Yr/MET", f"Gult {vtype}-varsel – {omr}. Følg med på utviklingen."))
+
+    # ── Vind (lokal) ──────────────────────────────────────────────────────────
+    if vind is not None:
+        if vind >= 20:
+            score += 3
+            tiltak.append(("🔴", "Yr (lokalt)", f"Sterk vind lokalt: {vind:.1f} m/s. Sjekk sikring av utstyr og kjøretøy."))
+        elif vind >= 13:
+            score += 1
+            tiltak.append(("🟡", "Yr (lokalt)", f"Kuling lokalt: {vind:.1f} m/s. Vær oppmerksom under utrykninger."))
+
+    # ── Tensio strømbrudd ─────────────────────────────────────────────────────
+    if tensio_pag:
+        score += min(len(tensio_pag) * 2, 6)
+        kommuner = ", ".join({b.get("kommune","?") for b in tensio_pag})
+        tiltak.append(("🟠", "Tensio", f"{len(tensio_pag)} pågående strømbrudd ({kommuner}). Sjekk at aggregat er klart og drivstoff er fylt. Kontakt Tensio for varighet."))
+    if tensio_plan:
+        tiltak.append(("🟡", "Tensio", f"{len(tensio_plan)} planlagte strømbrudd kommende dager. Forbered nødstrøm."))
+
+    # ── Akutte avvik ──────────────────────────────────────────────────────────
+    if akutte_avvik:
+        score += len(akutte_avvik)
+        tiltak.append(("🟠", "Avvik", f"{len(akutte_avvik)} ubehandlede akutte avvik i systemet. Følges opp før neste aksjon."))
+
+    # ── Anbefalt nivå ─────────────────────────────────────────────────────────
+    if score >= 6:
+        anbefalt = "🔴 Rød / Høy beredskap"
+    elif score >= 3:
+        anbefalt = "🟡 Forhøyet Beredskap"
+    else:
+        anbefalt = "🟢 Normal Beredskap"
+
+    # ── Generelle råd hvis ingen varsler ─────────────────────────────────────
+    if not tiltak:
+        tiltak.append(("🟢", "Status", "Ingen aktive varsler eller hendelser. Normal beredskap er tilstrekkelig."))
+
+    return score, anbefalt, tiltak
+
+
 def generer_beredskapsplan(vp,d):
     ml="".join(f"<li>{n.strip()}</li>" for n in vp["mannskaper"].splitlines() if n.strip()) or "<li><em>Ikke oppgitt</em></li>"
     ul="".join(f"<li>{u.strip()}</li>" for u in vp["utstyr"].splitlines() if u.strip()) or "<li><em>Ikke oppgitt</em></li>"
@@ -1859,10 +1941,52 @@ elif side == "⚙️ Administrasjon":
                 st.markdown(lampe(politilogg_ok, "Politilogg (politiet.no)"), unsafe_allow_html=True)
 
         st.write("")
-        adm_tabs = st.tabs(["📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
+        adm_tabs = st.tabs(["🤖 Beredskapsanalyse","📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
+
+        # ── Tab 0: Beredskapsanalyse ─────────────────────────────────────────
+        with adm_tabs[0]:
+            st.caption("Automatisk analyse basert på live-data fra Varsom, Yr/MET, Tensio og egne avvik.")
+            with st.spinner("Henter data..."):
+                _nve  = hent_nve_varsler(st.session_state.get("region_valg","Trøndelag (Melhus)"))
+                _met  = hent_met_varsler(st.session_state.get("region_valg","Trøndelag (Melhus)"))
+                _temp, _vind, _ = hent_lokal_vaer()
+                _tpag, _tplan   = hent_tensio_brudd()
+            score, anbefalt, tiltak = analyser_beredskap(
+                d, _nve, _met, _tpag, _tplan, akutte, _temp, _vind)
+
+            # Anbefalt nivå
+            niva_farge = {"🟢 Normal Beredskap":"#28a745","🟡 Forhøyet Beredskap":"#ffc107","🔴 Rød / Høy beredskap":"#dc3545"}
+            farge = niva_farge.get(anbefalt,"#333")
+            gjeldende = d['status']
+            st.markdown(f"""
+            <div style='background:{farge};color:white;padding:14px 18px;border-radius:8px;margin-bottom:12px;'>
+                <b style='font-size:1.1rem;'>Anbefalt beredskapsnivå: {anbefalt}</b><br>
+                <small>Nåværende: {gjeldende} &nbsp;·&nbsp; Situasjonsscore: {score} poeng</small>
+            </div>""", unsafe_allow_html=True)
+
+            if anbefalt != gjeldende:
+                st.warning(f"⚠️ Analysen anbefaler **{anbefalt}**, men nåværende nivå er **{gjeldende}**. Vurder å oppdatere beredskapsstatus under fanen 📡.")
+
+            st.markdown("---")
+            st.subheader("📋 Anbefalte tiltak")
+            ikon_farge = {"🔴":"#dc3545","🟠":"#fd7e14","🟡":"#ffc107","🟢":"#28a745"}
+            for ikon, kilde, tekst in tiltak:
+                bg = ikon_farge.get(ikon, "#eee") + "22"
+                brd = ikon_farge.get(ikon, "#aaa")
+                st.markdown(f"""<div style='border-left:4px solid {brd};background:{bg};
+                    padding:10px 14px;border-radius:6px;margin-bottom:8px;'>
+                    <b>{ikon} {kilde}</b><br><span style='font-size:0.93rem;'>{tekst}</span>
+                </div>""", unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.caption(f"Analysen oppdateres automatisk. Sist kjørt: {datetime.now().strftime('%H:%M:%S')} · Basert på {len(_nve)} NVE-varsler, {len(_met)} MET-varsler, {len(_tpag)} Tensio-brudd.")
+            if st.button("🔄 Oppdater analyse", use_container_width=True):
+                hent_nve_varsler.clear(); hent_met_varsler.clear()
+                hent_lokal_vaer.clear(); hent_tensio_brudd.clear()
+                st.rerun()
 
         # ── Tab 1: Beredskapsstatus ──────────────────────────────────────────
-        with adm_tabs[0]:
+        with adm_tabs[1]:
             a1,a2 = st.columns(2)
             with a1:
                 sv=["🟢 Normal Beredskap","🟡 Forhøyet Beredskap","🔴 Rød / Høy beredskap"]
@@ -1887,7 +2011,7 @@ elif side == "⚙️ Administrasjon":
                 st.toast("✅ Lagret!",icon="💾"); st.rerun()
 
         # ── Tab 2: Vaktinstruks ──────────────────────────────────────────────
-        with adm_tabs[1]:
+        with adm_tabs[2]:
             vchk1,vchk2=st.columns(2)
             with vchk1: va=st.checkbox("Aktiver vaktinstruks",value=vp.get("aktiv",False))
             with vchk2: vskjul=st.checkbox("Skjul på forsiden",value=vp.get("skjul_forside",False))
@@ -1919,7 +2043,7 @@ elif side == "⚙️ Administrasjon":
                     st.toast("🗑️ Nullstilt",icon="🗑️"); st.rerun()
 
         # ── Tab 3: Avvik ─────────────────────────────────────────────────────
-        with adm_tabs[2]:
+        with adm_tabs[3]:
             åpne=[a for a in avvik_liste if not a.get("fulgt_opp")]
             lukkede=[a for a in avvik_liste if a.get("fulgt_opp")]
             st.caption(f"{len(åpne)} åpne · {len(lukkede)} lukket")
@@ -1962,7 +2086,7 @@ elif side == "⚙️ Administrasjon":
                 if endret: gs_lagre_liste("avvik",AVVIK_FIL,avvik_liste,AVVIK_HDR); st.rerun()
 
         # ── Tab 4: Deltakelser ───────────────────────────────────────────────
-        with adm_tabs[3]:
+        with adm_tabs[4]:
             del_liste = gs_last_liste("deltakelse", DELTAKELSE_FIL)
             st.caption(f"{len(del_liste)} registreringer totalt")
             if not del_liste:
