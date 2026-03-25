@@ -64,12 +64,16 @@ AVVIK_HDR      = ["id","registrert","navn","epost","hendelse","konsekvens",
 SKADE_HDR      = ["registrert","innsats","behandler","kjonn","alder","skadetype",
                    "behandling","rad","konsultert","utstyr","merknad"]
 LOGG_HDR       = ["id","tidspunkt","forfatter","gradering","tekst"]
+KJORETOY_FIL   = "kjoretoy_data.json"
+KJORETOY_HDR   = ["id","registrert","kallesignal","sjafor","km_stand","drivstoff",
+                   "ytre_ok","forer_ok","medisinsk_ok","rom_ok","sekk_ok","merknad"]
 
 _GS_BOOL   = {"vaktplan":["aktiv","skjul_forside"],
-               "avvik":["umiddelbar_oppfolging","fulgt_opp"]}
+               "avvik":["umiddelbar_oppfolging","fulgt_opp"],
+               "kjoretoy":["ytre_ok","forer_ok","medisinsk_ok","rom_ok","sekk_ok"]}
 _GS_JSON   = {"skade":["skadetype","utstyr"],"deltakelse":["vedlegg"]}
 _GS_HDR    = {"deltakelse":DELTAKELSE_HDR,"avvik":AVVIK_HDR,
-              "skade":SKADE_HDR,"logg":LOGG_HDR}
+              "skade":SKADE_HDR,"logg":LOGG_HDR,"kjoretoy":KJORETOY_HDR}
 
 @st.cache_resource
 def _gs_sh():
@@ -667,6 +671,7 @@ with st.sidebar:
         "⚠️ Registrer avvik",
         "🩹 Skaderegistrering",
         "📝 Loggføring",
+        "✅ Sjekklister",
         "📋 Vaktinstruks",
         "💰 Kalkyle – Sanitetsvakt",
         "⚙️ Administrasjon",
@@ -1428,6 +1433,191 @@ elif side == "🩹 Skaderegistrering":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "📝 Loggføring":
     _logg_skjema()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: SJEKKLISTER
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "✅ Sjekklister":
+    st.markdown("<h2>✅ Operative Sjekklister</h2>", unsafe_allow_html=True)
+    liste_tabs = st.tabs(["🚑 Ambulanse / 5.6", "🚜 ATV / Scooter", "⛺ KO-henger"])
+
+    # ── Tab 1: Ambulanse 5.6 ─────────────────────────────────────────────────
+    with liste_tabs[0]:
+        st.caption("Dagsjekk fylles ut ved vaktstart eller etter endt aksjon.")
+        if st.session_state.get("_bil_ok"):
+            st.success(f"✅ Sjekk registrert for **{st.session_state.pop('_bil_ok')}**!")
+
+        with st.form("ambulanse_sjekk_form", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1: bil_id   = st.text_input("Kjøretøy", value="Melhus 5.6", disabled=True)
+            with c2: bil_sjaf = st.text_input("Sjåfør / Ansvarlig *", placeholder="Ola Nordmann")
+            with c3:
+                bil_km   = st.number_input("Km-stand", min_value=0, step=1)
+                bil_driv = st.selectbox("Drivstoff / Strøm", ["100%","75%","50%","25%","Reserve"])
+            st.markdown("---")
+            st.markdown("**Sjekkpunkter – kryss av når kontrollert**")
+            k_ytre  = st.checkbox("1. Ytre sjekk (strøm frakoblet, lys, dekk, skader, blålys/sirene ok)")
+            k_forer = st.checkbox("2. Førermiljø (samband/Nødnett testet, navigasjon ok, ingen gule lamper)")
+            k_med   = st.checkbox("3. Elektromedisinsk & gass (defib testet, sug bygger vakuum, O₂ trykk sjekket)")
+            k_rom   = st.checkbox("4. Båre & behandlingsrom (båre og belter sjekket, varmeapparat ok, gulv rent)")
+            k_sekk  = st.checkbox("5. Akuttsekker & materiell (sekk plombert/komplett, forbruksmateriell fylt opp)")
+            st.markdown("---")
+            bil_notat = st.text_area("Merknader / Mangler", placeholder="Alt OK, eller beskriv mangler...", height=60)
+            sendt_bil = st.form_submit_button("💾 Send inn kjøretøykontroll", type="primary", use_container_width=True)
+
+        if sendt_bil:
+            if not bil_sjaf.strip():
+                st.error("❌ Du må fylle inn navn på sjåfør/ansvarlig.")
+            else:
+                rad = {
+                    "id": str(uuid.uuid4())[:8],
+                    "registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
+                    "kallesignal": "Melhus 5.6",
+                    "sjafor": bil_sjaf.strip(),
+                    "km_stand": bil_km,
+                    "drivstoff": bil_driv,
+                    "ytre_ok": k_ytre,
+                    "forer_ok": k_forer,
+                    "medisinsk_ok": k_med,
+                    "rom_ok": k_rom,
+                    "sekk_ok": k_sekk,
+                    "merknad": bil_notat.strip()
+                }
+                try:
+                    gs_append("kjoretoy", KJORETOY_FIL, rad, KJORETOY_HDR)
+                    st.session_state["_bil_ok"] = "Melhus 5.6"
+                except Exception as e:
+                    st.error(f"Feil ved lagring: {e}")
+                st.rerun()
+
+        st.write("---")
+        st.subheader("📋 Siste kontroller – Melhus 5.6")
+        bil_liste = gs_last_liste("kjoretoy", KJORETOY_FIL)
+        amb_liste = [b for b in bil_liste if b.get("kallesignal") == "Melhus 5.6"]
+        if amb_liste:
+            dfb = pd.DataFrame(amb_liste)
+            _bk = {"registrert":"Tidspunkt","sjafor":"Utført av","drivstoff":"Drivstoff","merknad":"Merknad"}
+            vis = [c for c in _bk if c in dfb.columns]
+            st.dataframe(dfb[vis].rename(columns=_bk).tail(5).iloc[::-1], use_container_width=True, hide_index=True)
+        else:
+            st.caption("Ingen kontroller registrert ennå.")
+
+    # ── Tab 2: ATV / Scooter ─────────────────────────────────────────────────
+    with liste_tabs[1]:
+        st.caption("Sjekkliste for ATV eller scooter ved vaktstart.")
+        if st.session_state.get("_atv_ok"):
+            st.success(f"✅ Sjekk registrert for **{st.session_state.pop('_atv_ok')}**!")
+
+        with st.form("atv_sjekk_form", clear_on_submit=True):
+            a1, a2, a3 = st.columns(3)
+            with a1: atv_id   = st.text_input("Kjøretøy", value="ATV/Scooter", disabled=True)
+            with a2: atv_sjaf = st.text_input("Sjåfør / Ansvarlig *", placeholder="Ola Nordmann")
+            with a3: atv_driv = st.selectbox("Drivstoff", ["100%","75%","50%","25%","Reserve"])
+            st.markdown("---")
+            st.markdown("**Sjekkpunkter**")
+            atv_k1 = st.checkbox("1. Drivstoff og oljenivå ok")
+            atv_k2 = st.checkbox("2. Lys og signalhorn fungerer")
+            atv_k3 = st.checkbox("3. Dekk/belter/bremser ok")
+            atv_k4 = st.checkbox("4. Nødvendig utstyr lastet og sikret")
+            atv_k5 = st.checkbox("5. Samband/Nødnett testet")
+            st.markdown("---")
+            atv_notat = st.text_area("Merknader", placeholder="Alt OK, eller beskriv mangler...", height=60)
+            sendt_atv = st.form_submit_button("💾 Send inn kontroll", type="primary", use_container_width=True)
+
+        if sendt_atv:
+            if not atv_sjaf.strip():
+                st.error("❌ Du må fylle inn navn på sjåfør/ansvarlig.")
+            else:
+                rad = {
+                    "id": str(uuid.uuid4())[:8],
+                    "registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
+                    "kallesignal": "ATV/Scooter",
+                    "sjafor": atv_sjaf.strip(),
+                    "km_stand": 0,
+                    "drivstoff": atv_driv,
+                    "ytre_ok": atv_k1,
+                    "forer_ok": atv_k2,
+                    "medisinsk_ok": atv_k3,
+                    "rom_ok": atv_k4,
+                    "sekk_ok": atv_k5,
+                    "merknad": atv_notat.strip()
+                }
+                try:
+                    gs_append("kjoretoy", KJORETOY_FIL, rad, KJORETOY_HDR)
+                    st.session_state["_atv_ok"] = "ATV/Scooter"
+                except Exception as e:
+                    st.error(f"Feil ved lagring: {e}")
+                st.rerun()
+
+        st.write("---")
+        st.subheader("📋 Siste kontroller – ATV/Scooter")
+        bil_liste = gs_last_liste("kjoretoy", KJORETOY_FIL)
+        atv_liste = [b for b in bil_liste if b.get("kallesignal") == "ATV/Scooter"]
+        if atv_liste:
+            dfb = pd.DataFrame(atv_liste)
+            _bk = {"registrert":"Tidspunkt","sjafor":"Utført av","drivstoff":"Drivstoff","merknad":"Merknad"}
+            vis = [c for c in _bk if c in dfb.columns]
+            st.dataframe(dfb[vis].rename(columns=_bk).tail(5).iloc[::-1], use_container_width=True, hide_index=True)
+        else:
+            st.caption("Ingen kontroller registrert ennå.")
+
+    # ── Tab 3: KO-henger ─────────────────────────────────────────────────────
+    with liste_tabs[2]:
+        st.caption("Sjekkliste for KO-henger ved oppsett eller nedrigg.")
+        if st.session_state.get("_ko_ok"):
+            st.success(f"✅ Sjekk registrert for **{st.session_state.pop('_ko_ok')}**!")
+
+        with st.form("ko_sjekk_form", clear_on_submit=True):
+            k1c, k2c = st.columns(2)
+            with k1c: ko_sjaf = st.text_input("Ansvarlig *", placeholder="Ola Nordmann")
+            with k2c: ko_fase = st.selectbox("Type sjekk", ["Oppsett","Nedrigg","Mellomsjekk"])
+            st.markdown("---")
+            st.markdown("**Sjekkpunkter**")
+            ko_k1 = st.checkbox("1. Henger koblet og lys testet")
+            ko_k2 = st.checkbox("2. Aggregat startet og strøm ok")
+            ko_k3 = st.checkbox("3. Samband og Nødnett operativt")
+            ko_k4 = st.checkbox("4. Kart, tavle og loggmateriell på plass")
+            ko_k5 = st.checkbox("5. Varme/ventilasjon fungerer")
+            st.markdown("---")
+            ko_notat = st.text_area("Merknader", placeholder="Alt OK, eller beskriv mangler...", height=60)
+            sendt_ko = st.form_submit_button("💾 Send inn kontroll", type="primary", use_container_width=True)
+
+        if sendt_ko:
+            if not ko_sjaf.strip():
+                st.error("❌ Du må fylle inn navn på ansvarlig.")
+            else:
+                rad = {
+                    "id": str(uuid.uuid4())[:8],
+                    "registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
+                    "kallesignal": f"KO-henger ({ko_fase})",
+                    "sjafor": ko_sjaf.strip(),
+                    "km_stand": 0,
+                    "drivstoff": "–",
+                    "ytre_ok": ko_k1,
+                    "forer_ok": ko_k2,
+                    "medisinsk_ok": ko_k3,
+                    "rom_ok": ko_k4,
+                    "sekk_ok": ko_k5,
+                    "merknad": ko_notat.strip()
+                }
+                try:
+                    gs_append("kjoretoy", KJORETOY_FIL, rad, KJORETOY_HDR)
+                    st.session_state["_ko_ok"] = f"KO-henger ({ko_fase})"
+                except Exception as e:
+                    st.error(f"Feil ved lagring: {e}")
+                st.rerun()
+
+        st.write("---")
+        st.subheader("📋 Siste kontroller – KO-henger")
+        bil_liste = gs_last_liste("kjoretoy", KJORETOY_FIL)
+        ko_liste = [b for b in bil_liste if "KO-henger" in b.get("kallesignal","")]
+        if ko_liste:
+            dfb = pd.DataFrame(ko_liste)
+            _bk = {"registrert":"Tidspunkt","sjafor":"Ansvarlig","kallesignal":"Type","merknad":"Merknad"}
+            vis = [c for c in _bk if c in dfb.columns]
+            st.dataframe(dfb[vis].rename(columns=_bk).tail(5).iloc[::-1], use_container_width=True, hide_index=True)
+        else:
+            st.caption("Ingen kontroller registrert ennå.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: VAKTINSTRUKS
