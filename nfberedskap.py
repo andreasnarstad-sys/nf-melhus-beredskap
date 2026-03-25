@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import requests
 import pandas as pd
-import os, json, io, struct, math, re
+import os, json, io, struct, math, re, uuid, time
 from datetime import datetime, timedelta
 
 try:
@@ -843,26 +843,27 @@ if side == "🏠 Operativ tavle":
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ═══════════════════════════════════════════════════════════════════════════════
-# ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: REGISTRER DELTAKELSE
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "👤 Registrer deltakelse":
     st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
-    st.caption("Fyll ut skjemaet etter endt vakt eller aksjon. Ingen felter er obligatoriske.")
+    st.caption("Fyll ut skjemaet etter endt vakt eller aksjon. Navn er obligatorisk.")
 
     if st.session_state.get("_del_ok"):
         st.success(f"✅ Deltakelse registrert for **{st.session_state.pop('_del_ok')}**")
+    if st.session_state.get("_del_err"):
+        st.error(f"❌ Feil ved lagring til Google Sheets: {st.session_state.pop('_del_err')}")
 
     c1, c2 = st.columns(2)
     with c1:
-        d_navn   = st.text_input("Navn", key="_d_navn")
+        d_navn   = st.text_input("Navn *", key="_d_navn")
         d_aksjon = st.text_input("Aksjonsnavn / sted", key="_d_aksjon")
     with c2:
         t1, t2 = st.columns(2)
         with t1: d_tid_ut  = st.text_input("Tid ut",  placeholder="08:00", key="_d_tid_ut")
         with t2: d_tid_inn = st.text_input("Tid inn", placeholder="16:00", key="_d_tid_inn")
-        d_utlegg   = st.number_input("Private utlegg (kr)", min_value=0, step=50, key="_d_utlegg")
-        d_kvitt    = st.file_uploader("Kvittering", type=["jpg","jpeg","png","pdf"], key="_d_kvitt")
+        d_utlegg  = st.number_input("Private utlegg (kr)", min_value=0, step=50, key="_d_utlegg")
+        d_kvitt   = st.file_uploader("Kvittering", type=["jpg","jpeg","png","pdf"], key="_d_kvitt")
 
     st.markdown("---")
 
@@ -888,34 +889,37 @@ elif side == "👤 Registrer deltakelse":
 
     st.markdown("---")
     if st.button("💾 Registrer deltakelse", type="primary", use_container_width=True):
-        vn = []
-        if d_kvitt:
-            os.makedirs(VEDLEGG_MAPPE, exist_ok=True)
-            fn = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{d_kvitt.name}"
-            with open(os.path.join(VEDLEGG_MAPPE, fn), "wb") as fp: fp.write(d_kvitt.read())
-            vn.append(fn)
-        import uuid
-        rad = {
-            "id": str(uuid.uuid4())[:8],
-            "registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
-            "navn": d_navn.strip(),
-            "tid_ut": d_tid_ut.strip(),
-            "tid_inn": d_tid_inn.strip(),
-            "aksjon": d_aksjon.strip(),
-            "utlegg_kr": d_utlegg,
-            "privatbil": "Ja" if d_privatbil else "Nei",
-            "km_privatbil": d_km_priv,
-            "regnr": d_regnr.strip().upper(),
-            "mannskapsbil_km": d_km_mnnskap,
-            "ambulanse_km": d_km_amb,
-            "vedlegg": vn,
-        }
-        try:
-            gs_append("deltakelse", DELTAKELSE_FIL, rad, DELTAKELSE_HDR)
-            st.session_state["_del_ok"] = d_navn.strip() or "ukjent"
-        except Exception as e:
-            st.error(f"Feil ved lagring: {e}")
-        st.rerun()
+        if not d_navn.strip():
+            st.error("❌ Du må fylle inn navnet ditt for å registrere deltakelse.")
+        else:
+            vn = []
+            if d_kvitt:
+                os.makedirs(VEDLEGG_MAPPE, exist_ok=True)
+                fn = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{d_kvitt.name}"
+                with open(os.path.join(VEDLEGG_MAPPE, fn), "wb") as fp: fp.write(d_kvitt.read())
+                vn.append(fn)
+            rad = {
+                "id": str(uuid.uuid4())[:8],
+                "registrert": datetime.now().strftime('%d.%m.%Y %H:%M'),
+                "navn": d_navn.strip(),
+                "tid_ut": d_tid_ut.strip(),
+                "tid_inn": d_tid_inn.strip(),
+                "aksjon": d_aksjon.strip(),
+                "utlegg_kr": d_utlegg,
+                "privatbil": "Ja" if d_privatbil else "Nei",
+                "km_privatbil": d_km_priv,
+                "regnr": d_regnr.strip().upper(),
+                "mannskapsbil_km": d_km_mnnskap,
+                "ambulanse_km": d_km_amb,
+                "vedlegg": vn,
+            }
+            try:
+                gs_append("deltakelse", DELTAKELSE_FIL, rad, DELTAKELSE_HDR)
+                st.session_state["_del_ok"] = d_navn.strip()
+                time.sleep(1.5)
+            except Exception as e:
+                st.session_state["_del_err"] = str(e)
+            st.rerun()
 
     st.write("---")
     st.subheader("📋 Registreringer i dag")
