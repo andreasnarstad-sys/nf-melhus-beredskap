@@ -199,20 +199,8 @@ def gs_lagre_liste(tab, fallback_fil, data, headers):
         lagre_liste(fallback_fil, data)
 
 DEFAULTS = {"status":"🟢 Normal Beredskap","beskjed":"Klar til innsats i Melhus.",
-            "leder":"Ikke satt","vakt":"9XX XX XXX","kort":"Daglig drift",
+            "leder":"Ikke satt","vakt":"9XX XX XXX","kort":"Daglig drift","kort_url":"",
             "talegruppe":"","logg":"","ekom":"🟢 Normal drift","vei":"🟢 Veinett åpent"}
-# Google Drive-lenker per tiltakskort – fyll inn URL for hvert kort
-TILTAKSKORT_URL = {
-    "Snøskred":                             "",  # lim inn Google Drive-lenke her
-    "Flom":                                 "",
-    "Jordras":                              "",
-    "Ekom-bortfall":                        "",
-    "Isolasjon / Evakuering":               "",
-    "Søk/Redning":                          "",
-    "Ekstremvær":                           "",
-    "Skog- og terrengbrann":                "",
-    "Masseskade / Større ulykke (Triage)":  "",
-}
 
 VP_DEFAULTS = {"sted":"","lagleder":"","mannskaper":"","utstyr":"","legevakt":"",
                "sykehus":"","talegruppe":"","tid_fra":"","tid_til":"","notat":"","aktiv":False,"skjul_forside":False}
@@ -1436,7 +1424,7 @@ if side == "🏠 Operativ tavle":
               "background:#cc0000;color:white;border:2px solid #990000;box-shadow:0 2px 8px rgba(200,0,0,0.4);font-size:1rem;")
         tg = d.get("talegruppe","") or ""
         tg_html = (f"<br><span style='font-size:1.1rem;'>📻 Talegruppe: <b>{tg}</b></span>" if tg else "")
-        _kort_url = TILTAKSKORT_URL.get(d['kort'], "") if _kort_aktiv else ""
+        _kort_url = (d.get('kort_url') or "") if _kort_aktiv else ""
         if _kort_url:
             _kort_html = (f"<a href='{_kort_url}' target='_blank' style='display:inline-block;{ks}"
                           f"padding:6px 14px;border-radius:6px;font-weight:bold;text-decoration:none;cursor:pointer;'>"
@@ -2109,6 +2097,7 @@ Nåværende score: **{score} poeng**
                 nb=st.text_area("Beskjed til stab",value=d['beskjed'])
                 kv=["Ingen","Daglig drift","Snøskred","Flom","Jordras","Ekom-bortfall","Isolasjon / Evakuering","Søk/Redning","Ekstremvær","Skog- og terrengbrann","Masseskade / Større ulykke (Triage)"]
                 nk=st.selectbox("Tiltakskort",kv,index=kv.index(d['kort']))
+                nku=st.text_input("🔗 Google Drive-lenke til tiltakskort",value=d.get('kort_url',''),placeholder="https://drive.google.com/...", help="Lim inn lenken til PDF/dokument i Google Drive. Vises som klikkbar knapp på tavlen.")
             with a2:
                 nl=st.text_input("Leder",value=d['leder'])
                 nv=st.text_input("Vakt-tlf",value=d['vakt'])
@@ -2125,7 +2114,7 @@ Nåværende score: **{score} poeng**
             c_save, c_reset = st.columns([3,1])
             with c_save:
                 if st.button("💾 Lagre beredskapsstatus", type="primary", use_container_width=True):
-                    gs_lagre_json("beredskap",FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"talegruppe":ntg,"logg":nlog,"ekom":ne,"vei":nve})
+                    gs_lagre_json("beredskap",FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"kort_url":nku,"talegruppe":ntg,"logg":nlog,"ekom":ne,"vei":nve})
                     st.toast("✅ Lagret!",icon="💾"); st.rerun()
             with c_reset:
                 if st.button("🔄 Nullstill til daglig drift", use_container_width=True):
