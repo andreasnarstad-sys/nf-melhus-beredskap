@@ -900,19 +900,17 @@ elif side == "👤 Registrer deltakelse":
                 st.session_state["_del_feil"] = f"Feil ved lagring: {e}"
         st.rerun()
 
-    st.write("---"); st.subheader("📋 Registreringer i dag")
-    today=datetime.now().strftime('%d.%m.%Y')
-    dagens=[r for r in gs_last_liste("deltakelse", DELTAKELSE_FIL) if r.get("registrert","").startswith(today)]
-    if dagens:
+    st.write("---"); st.subheader("📋 Registrerte deltakelser")
+    alle_del = gs_last_liste("deltakelse", DELTAKELSE_FIL)
+    if alle_del:
         _kol_navn={"registrert":"Tidspunkt","navn":"Navn","oppdrag":"Oppdrag","tid_ut":"Tid ut",
                    "tid_inn":"Tid inn","utlegg_kr":"Utlegg (kr)","privatbil":"Privatbil",
                    "km_kjort":"Km","regnr":"Reg.nr"}
-        dfd=pd.DataFrame(dagens)
+        dfd=pd.DataFrame(alle_del)
         vis_kol=[c for c in _kol_navn if c in dfd.columns]
-        dfd=dfd[vis_kol].rename(columns=_kol_navn)
-        st.dataframe(dfd, use_container_width=True, hide_index=True)
+        st.dataframe(dfd[vis_kol].rename(columns=_kol_navn), use_container_width=True, hide_index=True)
     else:
-        st.caption("Ingen registreringer i dag ennå.")
+        st.caption("Ingen deltakelser registrert ennå.")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: REGISTRER AVVIK
