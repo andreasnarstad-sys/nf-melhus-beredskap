@@ -151,7 +151,7 @@ def gs_lagre_json(tab, fallback_fil, data):
         hdrs = list(data.keys())
         vals = [_gs_ser_val(v) for v in data.values()]
         # Én batch-oppdatering = 1 API-kall uansett størrelse
-        ws.update([hdrs, vals], value_input_option="RAW")
+        ws.update("A1", [hdrs, vals], value_input_option="RAW")
         _gs_invalidate()
     except Exception as e:
         st.warning(f"GS lagringsfeil: {e}")
@@ -1538,7 +1538,7 @@ if side == "🏠 Operativ tavle":
         st.text_area("", value=d['logg'], height=120, disabled=True, label_visibility="collapsed")
 
     # Vaktinstruks i dashboard
-    if vp.get("aktiv") and not vp.get("skjul_forside") and (vp.get("sted") or vp.get("lagleder")):
+    if vp.get("aktiv") and not vp.get("skjul_forside"):
         st.write("---"); st.subheader("📋 Instruks for aktivitet/vakt")
         rig = beregn_rig(vp["tid_fra"])
         vi1,vi2,vi3 = st.columns(3)
@@ -1787,7 +1787,7 @@ elif side == "✅ Sjekklister":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif side == "📋 Vaktinstruks":
     st.markdown("<h2>📋 Instruks for aktivitet/vakt</h2>", unsafe_allow_html=True)
-    if not vp.get("aktiv") or not (vp.get("sted") or vp.get("lagleder")):
+    if not vp.get("aktiv"):
         st.info("Ingen aktiv vaktinstruks. Admin fyller ut under ⚙️ Administrasjon på hovedsiden.")
     else:
         rig=beregn_rig(vp["tid_fra"])
