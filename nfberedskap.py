@@ -687,191 +687,13 @@ with st.sidebar:
         st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SIDE: OPERATIV TAVLE
+# FRAGMENT-FUNKSJONER FOR SKJEMA-SIDER
+# Definert her (module-nivå) slik at @st.fragment-dekoratoren kan registrere
+# dem før if/elif-kjeden starter. Fragmenter reruns seg selv, ikke hele appen.
 # ═══════════════════════════════════════════════════════════════════════════════
-if side == "🏠 Operativ tavle":
 
-    st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp Melhus</h2>", unsafe_allow_html=True)
-
-    # Status-banner
-    st.markdown(f"""<div style="background:{bg};padding:20px;border-radius:15px;
-    text-align:center;color:white;border:2px solid rgba(0,0,0,0.2);">
-    <h1 style="margin:0;font-size:3.5rem;">{d['status']}</h1>
-    <p style="font-size:1.5rem;margin-top:5px;font-weight:500;">{d['beskjed']}</p>
-    </div>""", unsafe_allow_html=True)
-    st.write("")
-
-    # Alarmtone rød beredskap
-    if d['status'] == "🔴 Rød / Høy beredskap":
-        if not st.session_state.get("alarm_spilt"):
-            st.session_state["alarm_spilt"] = True
-            st.audio(generer_alarm_wav(), format="audio/wav", autoplay=True)
-    else:
-        st.session_state["alarm_spilt"] = False
-
-    if akutte:
-        st.markdown(f"""<div style='background:linear-gradient(135deg,#e65c00,#c0392b);
-        padding:15px 20px;border-radius:10px;color:white;border-left:6px solid #ff0000;margin-bottom:10px;'>
-        <b style='font-size:1.1rem;'>⚡ {len(akutte)} avvik krever umiddelbar oppfølging</b>
-        &nbsp;–&nbsp; åpne administrasjonspanelet nedenfor.</div>""", unsafe_allow_html=True)
-
-    # Info-panel
-    c1, c2, c3 = st.columns([1.2,1,1.2])
-    with c1:
-        t,v,prog = hent_lokal_vaer()
-        if t is not None:
-            ps=' | '.join([f"{i['t']}: {i['temp']}°" for i in prog])
-            st.markdown(f"<div class='nf-card'><b>📍 Melhus Sentrum:</b><br>"
-                        f"<h2 style='margin:5px 0;color:#1f77b4;'>{t}°C &nbsp;|&nbsp; {v} m/s</h2>"
-                        f"<small style='opacity:0.7;'>{ps}</small></div>", unsafe_allow_html=True)
-        else:
-            st.markdown("<div class='nf-card'><b>📍 Melhus Sentrum:</b><br><br><small>⚠️ Værvarselet utilgjengelig.</small></div>", unsafe_allow_html=True)
-    with c2:
-        ks = ("background:rgba(128,128,128,0.15);color:inherit;border:1px solid rgba(128,128,128,0.3);font-size:0.85rem;opacity:0.7;"
-              if d['kort'] in ('Ingen','Daglig drift') else
-              "background:#cc0000;color:white;border:2px solid #990000;box-shadow:0 2px 8px rgba(200,0,0,0.4);font-size:1rem;")
-        st.markdown(f"<div class='nf-card-blue'><b>📞 Operativ Ledelse:</b><br>"
-                    f"<span style='font-size:1.1rem;'>Leder: <b>{d['leder']}</b></span><br>"
-                    f"<span style='font-size:1.1rem;'>Vakt-tlf: <b>{d['vakt']}</b></span>"
-                    f"<br><br><div style='display:inline-block;{ks}padding:4px 12px;border-radius:6px;font-weight:bold;'>"
-                    f"📋 {d['kort']}</div></div>", unsafe_allow_html=True)
-    with c3:
-        pagaende_brudd, planlagte_brudd = hent_tensio_brudd()
-        tot_berort = sum(b["antall"] for b in pagaende_brudd)
-        har_strom_feil = bool(pagaende_brudd)
-        har_strom_plan = bool(planlagte_brudd) and not pagaende_brudd
-
-        ic = ("nf-infra-err" if "🔴" in d['ekom'] or "🔴" in d['vei'] or har_strom_feil
-              else "nf-infra-warn" if "🟡" in d['ekom'] or "🟡" in d['vei'] or har_strom_plan
-              else "nf-infra-ok")
-
-        if pagaende_brudd:
-            brudd_linjer = ""
-            for b in pagaende_brudd[:3]:
-                arsak_str = f" ({b['arsak']})" if b.get('arsak') else ""
-                start_str = f" – {b['start']}" if b.get('start') else ""
-                brudd_linjer += f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}{arsak_str}{start_str}</span>"
-            ekstra = f"<br><span style='font-size:0.8rem;opacity:0.5;'>+{len(pagaende_brudd)-3} til</span>" if len(pagaende_brudd) > 3 else ""
-            strom_html = f"<span style='color:#dc3545;font-weight:bold;'>⚡ {len(pagaende_brudd)} brudd – {tot_berort} kunder berørt</span>{brudd_linjer}{ekstra}"
-        elif planlagte_brudd:
-            plan_linjer = ""
-            for b in planlagte_brudd[:2]:
-                start_str = f" – {b['start']}" if b.get('start') else ""
-                plan_linjer += f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}{start_str}</span>"
-            strom_html = f"<span style='color:#b8860b;font-weight:bold;'>🔧 {len(planlagte_brudd)} planlagt</span>{plan_linjer}"
-        else:
-            strom_html = "<span style='color:#28a745;font-size:0.88rem;'>✅ Ingen strømbrudd</span>"
-
-        st.markdown(
-            f"<div class='nf-infra {ic}'><b>📡 Kritisk Infrastruktur:</b><br><br>"
-            f"<b>EKOM:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['ekom']}</span><br><br>"
-            f"<b>VEI / ISOLASJON:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['vei']}</span><br><br>"
-            f"<b>STRØM (Tensio):</b><br>{strom_html}"
-            f"<br><span style='font-size:0.72rem;opacity:0.4;'>↻ 2 min</span></div>",
-            unsafe_allow_html=True)
-
-    # Politilogg-boks på operativ tavle
-    st.write("")
-    pl_siste = hent_politilogg("")
-    if pl_siste:
-        pl_linjer = ""
-        for h in pl_siste[:5]:
-            kat  = str(h.get("category") or h.get("tema") or h.get("type") or h.get("kategori") or "Annet").strip().capitalize()
-            kom  = h.get("municipality") or h.get("kommune") or h.get("location") or h.get("sted") or "–"
-            tid_r = h.get("createdOn") or h.get("time") or h.get("timestamp") or h.get("dato") or ""
-            try:
-                tid_str = datetime.fromisoformat(str(tid_r).replace("Z","+00:00")).strftime("%d.%m %H:%M") if tid_r else "–"
-            except: tid_str = str(tid_r)[:11]
-            tekst = h.get("text") or h.get("description") or h.get("desc") or h.get("melding") or h.get("title") or ""
-            tekst_kort = (tekst[:80] + "…") if len(tekst) > 80 else tekst
-            farge = POLITILOGG_FARGER.get(kat, "#6c757d")
-            pl_linjer += (
-                f"<span style='display:inline-block;background:{farge};color:white;"
-                f"font-size:0.68rem;border-radius:3px;padding:1px 5px;margin-right:4px;'>{kat}</span>"
-                f"<span style='font-size:0.82rem;'><b>{kom}</b> &nbsp;"
-                f"<span style='opacity:0.55;'>{tid_str}</span>"
-                f"{(' – ' + tekst_kort) if tekst_kort else ''}</span><br>"
-            )
-        st.markdown(
-            f"<div class='nf-card' style='padding:12px 16px;'>"
-            f"<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b>"
-            f"<span style='float:right;font-size:0.72rem;opacity:0.45;'>↻ 90 sek</span><br><br>"
-            f"{pl_linjer}"
-            f"</div>",
-            unsafe_allow_html=True)
-    else:
-        st.markdown(
-            "<div class='nf-card' style='padding:12px 16px;'>"
-            "<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b><br><br>"
-            "<span style='opacity:0.5;font-size:0.85rem;'>Ingen data tilgjengelig – "
-            "<a href='https://www.politiet.no/politiloggen?distrikt=trondelag' target='_blank'>åpne politiet.no</a></span>"
-            "</div>",
-            unsafe_allow_html=True)
-
-    # Kart og varsler
-    st.write("---")
-    ct, cf = st.columns([3,1])
-    with ct: st.subheader("🚨 Operativ Oversikt & Farevarsler")
-    with cf: valgt_region = st.selectbox("🌍 Velg område:", list(KART_KOORDINATER.keys()), index=0)
-    cm, ca = st.columns([1.5,1])
-    with cm:
-        components.iframe(f"https://embed.windy.com/embed2.html?{KART_KOORDINATER[valgt_region]}&overlay=wind&metricWind=m%2Fs", height=450)
-    with ca:
-        varsler = {**hent_nve_varsler(valgt_region), **hent_met_varsler(valgt_region)}
-        varsler = list(varsler.values())
-        if varsler:
-            df=pd.DataFrame(varsler).sort_values(by=["Nivå","Område"],ascending=[False,True])
-            def srow(row):
-                c={2:("#FFFF00","black"),3:("#FF9900","white"),4:("#FF0000","white")}.get(row.Nivå,("white","black"))
-                return [f'background-color:{c[0]};color:{c[1]};font-weight:bold']*len(row)
-            st.dataframe(df.style.apply(srow,axis=1),use_container_width=True,height=450,hide_index=True)
-        else:
-            st.markdown(f"""<div class='nf-ok-box'><div style='font-size:3rem;'>✅</div>
-            <div style='font-size:1.2rem;font-weight:bold;color:#28a745;margin-top:10px;'>Ingen aktive farevarsler</div>
-            <div style='opacity:0.6;margin-top:6px;'>for {valgt_region.split()[0]}</div></div>""", unsafe_allow_html=True)
-
-    # Operativ logg
-    if d['logg']:
-        st.write("---"); st.subheader("📝 Operativ Logg")
-        st.text_area("", value=d['logg'], height=120, disabled=True, label_visibility="collapsed")
-
-    # Vaktinstruks i dashboard
-    if vp.get("aktiv") and not vp.get("skjul_forside") and (vp.get("sted") or vp.get("lagleder")):
-        st.write("---"); st.subheader("📋 Instruks for aktivitet/vakt")
-        rig = beregn_rig(vp["tid_fra"])
-        vi1,vi2,vi3 = st.columns(3)
-        with vi1:
-            rh=f"<div class='nf-rig' style='margin-top:8px;'>⏰ Ferdig rigget: <b>{rig}</b></div>" if rig else ""
-            st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
-                        f"<div class='nf-lbl'>📍 Sted</div><div class='nf-val' style='font-size:1.15rem;'>{vp['sted'] or '–'}</div>"
-                        f"<div class='nf-lbl' style='margin-top:10px;'>🕐 Tid</div><div class='nf-val'>{vp['tid_fra'] or '–'} – {vp['tid_til'] or '–'}</div>{rh}</div>", unsafe_allow_html=True)
-        with vi2:
-            mv="".join(f"<div class='nf-div'>• {m.strip()}</div>" for m in vp["mannskaper"].splitlines() if m.strip()) or "<em style='opacity:0.4;'>Ikke oppgitt</em>"
-            st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
-                        f"<div class='nf-lbl'>👷 Lagleder</div><div class='nf-val' style='margin-bottom:10px;'>{vp['lagleder'] or '–'}</div>"
-                        f"<div class='nf-lbl'>👥 Mannskaper</div><div style='font-size:0.9rem;line-height:1.8;'>{mv}</div></div>", unsafe_allow_html=True)
-        with vi3:
-            uv="".join(f"<div class='nf-div'>• {u.strip()}</div>" for u in vp["utstyr"].splitlines() if u.strip()) or "<em style='opacity:0.4;'>Ikke oppgitt</em>"
-            st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
-                        f"<div class='nf-lbl'>🎒 Utstyr</div><div style='font-size:0.9rem;line-height:1.8;'>{uv}</div></div>", unsafe_allow_html=True)
-        vi4,vi5,vi6 = st.columns(3)
-        with vi4: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏥 Legevakt</div><div class='nf-val'>{vp['legevakt'] or '–'}</div></div>", unsafe_allow_html=True)
-        with vi5: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏨 Sykehus</div><div class='nf-val'>{vp['sykehus'] or '–'}</div></div>", unsafe_allow_html=True)
-        with vi6: st.markdown(f"<div class='nf-info'><div class='nf-lbl'>📻 Talegruppe</div><div class='nf-val'>{vp['talegruppe'] or '–'}</div></div>", unsafe_allow_html=True)
-        if vp.get("notat"): st.info(f"📝 {vp['notat']}")
-        st.download_button("📥 Eksporter beredskapsplan", data=generer_beredskapsplan(vp,d).encode("utf-8"),
-                           file_name=f"beredskapsplan_{datetime.now().strftime('%Y%m%d_%H%M')}.html", mime="text/html")
-
-    st.markdown(f"<div style='text-align:right;color:#aaa;'><small>Sist lastet: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</small></div>", unsafe_allow_html=True)
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# ═══════════════════════════════════════════════════════════════════════════════
-# SIDE: REGISTRER DELTAKELSE
-# ═══════════════════════════════════════════════════════════════════════════════
-elif side == "👤 Registrer deltakelse":
-    st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
-    st.caption("Fyll ut skjemaet etter endt vakt eller aksjon. Navn er obligatorisk.")
-
+@st.fragment
+def _deltakelse_skjema():
     if st.session_state.get("_del_ok"):
         st.success(f"✅ Deltakelse registrert for **{st.session_state.pop('_del_ok')}**")
     if st.session_state.get("_del_err"):
@@ -947,12 +769,8 @@ elif side == "👤 Registrer deltakelse":
             st.rerun()
 
 
-# SIDE: REGISTRER AVVIK
-# ═══════════════════════════════════════════════════════════════════════════════
-elif side == "⚠️ Registrer avvik":
-    st.markdown("<h2>⚠️ Registrer avvik</h2>", unsafe_allow_html=True)
-    st.caption("Avvik sendes automatisk på e-post til ansvarlig og lagres for oppfølging.")
-
+@st.fragment
+def _avvik_skjema():
     with st.form("avvik_form", clear_on_submit=True):
         ak1,ak2=st.columns(2)
         with ak1: av_navn=st.text_input("Ditt navn *")
@@ -975,13 +793,9 @@ elif side == "⚠️ Registrer avvik":
                 if av_umiddelbar: st.warning("⚡ Avvik registrert – merket som akutt!")
                 else: st.success("✅ Avvik registrert. Takk for tilbakemeldingen.")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SIDE: SKADEREGISTRERING
-# ═══════════════════════════════════════════════════════════════════════════════
-elif side == "🩹 Skaderegistrering":
-    st.markdown("<h2>🩹 Skaderegistrering</h2>", unsafe_allow_html=True)
-    st.caption("Registrer pasienter behandlet under oppdrag eller sanitetsvakt.")
 
+@st.fragment
+def _skade_skjema():
     with st.form("skade_form", clear_on_submit=True):
         sf1, sf2 = st.columns(2)
         with sf1:
@@ -1035,11 +849,9 @@ elif side == "🩹 Skaderegistrering":
     else:
         st.caption("Ingen skader registrert ennå.")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SIDE: LOGGFØRING
-# ═══════════════════════════════════════════════════════════════════════════════
-elif side == "📝 Loggføring":
 
+@st.fragment
+def _logg_skjema():
     GRADERING = {
         "frigjort":         {"label":"Frigjort til media",      "farge":"#28a745","bg":"rgba(40,167,69,0.12)", "ikon":"📢","kort":"MEDIA"},
         "intern_offentlig": {"label":"Intern – offentlig",      "farge":"#2196f3","bg":"rgba(33,150,243,0.10)","ikon":"🔓","kort":"INTERN"},
@@ -1406,6 +1218,216 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
                         ny_liste = [x for x in gs_last_liste("logg", LOGG_FIL) if x.get("id") != e.get("id")]
                         gs_lagre_liste("logg", LOGG_FIL, ny_liste, LOGG_HDR)
                         st.toast("Oppføring slettet", icon="🗑️"); st.rerun()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: OPERATIV TAVLE
+# ═══════════════════════════════════════════════════════════════════════════════
+if side == "🏠 Operativ tavle":
+
+    st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp Melhus</h2>", unsafe_allow_html=True)
+
+    # Status-banner
+    st.markdown(f"""<div style="background:{bg};padding:20px;border-radius:15px;
+    text-align:center;color:white;border:2px solid rgba(0,0,0,0.2);">
+    <h1 style="margin:0;font-size:3.5rem;">{d['status']}</h1>
+    <p style="font-size:1.5rem;margin-top:5px;font-weight:500;">{d['beskjed']}</p>
+    </div>""", unsafe_allow_html=True)
+    st.write("")
+
+    # Alarmtone rød beredskap
+    if d['status'] == "🔴 Rød / Høy beredskap":
+        if not st.session_state.get("alarm_spilt"):
+            st.session_state["alarm_spilt"] = True
+            st.audio(generer_alarm_wav(), format="audio/wav", autoplay=True)
+    else:
+        st.session_state["alarm_spilt"] = False
+
+    if akutte:
+        st.markdown(f"""<div style='background:linear-gradient(135deg,#e65c00,#c0392b);
+        padding:15px 20px;border-radius:10px;color:white;border-left:6px solid #ff0000;margin-bottom:10px;'>
+        <b style='font-size:1.1rem;'>⚡ {len(akutte)} avvik krever umiddelbar oppfølging</b>
+        &nbsp;–&nbsp; åpne administrasjonspanelet nedenfor.</div>""", unsafe_allow_html=True)
+
+    # Info-panel
+    c1, c2, c3 = st.columns([1.2,1,1.2])
+    with c1:
+        t,v,prog = hent_lokal_vaer()
+        if t is not None:
+            ps=' | '.join([f"{i['t']}: {i['temp']}°" for i in prog])
+            st.markdown(f"<div class='nf-card'><b>📍 Melhus Sentrum:</b><br>"
+                        f"<h2 style='margin:5px 0;color:#1f77b4;'>{t}°C &nbsp;|&nbsp; {v} m/s</h2>"
+                        f"<small style='opacity:0.7;'>{ps}</small></div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div class='nf-card'><b>📍 Melhus Sentrum:</b><br><br><small>⚠️ Værvarselet utilgjengelig.</small></div>", unsafe_allow_html=True)
+    with c2:
+        ks = ("background:rgba(128,128,128,0.15);color:inherit;border:1px solid rgba(128,128,128,0.3);font-size:0.85rem;opacity:0.7;"
+              if d['kort'] in ('Ingen','Daglig drift') else
+              "background:#cc0000;color:white;border:2px solid #990000;box-shadow:0 2px 8px rgba(200,0,0,0.4);font-size:1rem;")
+        st.markdown(f"<div class='nf-card-blue'><b>📞 Operativ Ledelse:</b><br>"
+                    f"<span style='font-size:1.1rem;'>Leder: <b>{d['leder']}</b></span><br>"
+                    f"<span style='font-size:1.1rem;'>Vakt-tlf: <b>{d['vakt']}</b></span>"
+                    f"<br><br><div style='display:inline-block;{ks}padding:4px 12px;border-radius:6px;font-weight:bold;'>"
+                    f"📋 {d['kort']}</div></div>", unsafe_allow_html=True)
+    with c3:
+        pagaende_brudd, planlagte_brudd = hent_tensio_brudd()
+        tot_berort = sum(b["antall"] for b in pagaende_brudd)
+        har_strom_feil = bool(pagaende_brudd)
+        har_strom_plan = bool(planlagte_brudd) and not pagaende_brudd
+
+        ic = ("nf-infra-err" if "🔴" in d['ekom'] or "🔴" in d['vei'] or har_strom_feil
+              else "nf-infra-warn" if "🟡" in d['ekom'] or "🟡" in d['vei'] or har_strom_plan
+              else "nf-infra-ok")
+
+        if pagaende_brudd:
+            brudd_linjer = ""
+            for b in pagaende_brudd[:3]:
+                arsak_str = f" ({b['arsak']})" if b.get('arsak') else ""
+                start_str = f" – {b['start']}" if b.get('start') else ""
+                brudd_linjer += f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}{arsak_str}{start_str}</span>"
+            ekstra = f"<br><span style='font-size:0.8rem;opacity:0.5;'>+{len(pagaende_brudd)-3} til</span>" if len(pagaende_brudd) > 3 else ""
+            strom_html = f"<span style='color:#dc3545;font-weight:bold;'>⚡ {len(pagaende_brudd)} brudd – {tot_berort} kunder berørt</span>{brudd_linjer}{ekstra}"
+        elif planlagte_brudd:
+            plan_linjer = ""
+            for b in planlagte_brudd[:2]:
+                start_str = f" – {b['start']}" if b.get('start') else ""
+                plan_linjer += f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}{start_str}</span>"
+            strom_html = f"<span style='color:#b8860b;font-weight:bold;'>🔧 {len(planlagte_brudd)} planlagt</span>{plan_linjer}"
+        else:
+            strom_html = "<span style='color:#28a745;font-size:0.88rem;'>✅ Ingen strømbrudd</span>"
+
+        st.markdown(
+            f"<div class='nf-infra {ic}'><b>📡 Kritisk Infrastruktur:</b><br><br>"
+            f"<b>EKOM:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['ekom']}</span><br><br>"
+            f"<b>VEI / ISOLASJON:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['vei']}</span><br><br>"
+            f"<b>STRØM (Tensio):</b><br>{strom_html}"
+            f"<br><span style='font-size:0.72rem;opacity:0.4;'>↻ 2 min</span></div>",
+            unsafe_allow_html=True)
+
+    # Politilogg-boks på operativ tavle
+    st.write("")
+    pl_siste = hent_politilogg("")
+    if pl_siste:
+        pl_linjer = ""
+        for h in pl_siste[:5]:
+            kat  = str(h.get("category") or h.get("tema") or h.get("type") or h.get("kategori") or "Annet").strip().capitalize()
+            kom  = h.get("municipality") or h.get("kommune") or h.get("location") or h.get("sted") or "–"
+            tid_r = h.get("createdOn") or h.get("time") or h.get("timestamp") or h.get("dato") or ""
+            try:
+                tid_str = datetime.fromisoformat(str(tid_r).replace("Z","+00:00")).strftime("%d.%m %H:%M") if tid_r else "–"
+            except: tid_str = str(tid_r)[:11]
+            tekst = h.get("text") or h.get("description") or h.get("desc") or h.get("melding") or h.get("title") or ""
+            tekst_kort = (tekst[:80] + "…") if len(tekst) > 80 else tekst
+            farge = POLITILOGG_FARGER.get(kat, "#6c757d")
+            pl_linjer += (
+                f"<span style='display:inline-block;background:{farge};color:white;"
+                f"font-size:0.68rem;border-radius:3px;padding:1px 5px;margin-right:4px;'>{kat}</span>"
+                f"<span style='font-size:0.82rem;'><b>{kom}</b> &nbsp;"
+                f"<span style='opacity:0.55;'>{tid_str}</span>"
+                f"{(' – ' + tekst_kort) if tekst_kort else ''}</span><br>"
+            )
+        st.markdown(
+            f"<div class='nf-card' style='padding:12px 16px;'>"
+            f"<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b>"
+            f"<span style='float:right;font-size:0.72rem;opacity:0.45;'>↻ 90 sek</span><br><br>"
+            f"{pl_linjer}"
+            f"</div>",
+            unsafe_allow_html=True)
+    else:
+        st.markdown(
+            "<div class='nf-card' style='padding:12px 16px;'>"
+            "<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b><br><br>"
+            "<span style='opacity:0.5;font-size:0.85rem;'>Ingen data tilgjengelig – "
+            "<a href='https://www.politiet.no/politiloggen?distrikt=trondelag' target='_blank'>åpne politiet.no</a></span>"
+            "</div>",
+            unsafe_allow_html=True)
+
+    # Kart og varsler
+    st.write("---")
+    ct, cf = st.columns([3,1])
+    with ct: st.subheader("🚨 Operativ Oversikt & Farevarsler")
+    with cf: valgt_region = st.selectbox("🌍 Velg område:", list(KART_KOORDINATER.keys()), index=0)
+    cm, ca = st.columns([1.5,1])
+    with cm:
+        components.iframe(f"https://embed.windy.com/embed2.html?{KART_KOORDINATER[valgt_region]}&overlay=wind&metricWind=m%2Fs", height=450)
+    with ca:
+        varsler = {**hent_nve_varsler(valgt_region), **hent_met_varsler(valgt_region)}
+        varsler = list(varsler.values())
+        if varsler:
+            df=pd.DataFrame(varsler).sort_values(by=["Nivå","Område"],ascending=[False,True])
+            def srow(row):
+                c={2:("#FFFF00","black"),3:("#FF9900","white"),4:("#FF0000","white")}.get(row.Nivå,("white","black"))
+                return [f'background-color:{c[0]};color:{c[1]};font-weight:bold']*len(row)
+            st.dataframe(df.style.apply(srow,axis=1),use_container_width=True,height=450,hide_index=True)
+        else:
+            st.markdown(f"""<div class='nf-ok-box'><div style='font-size:3rem;'>✅</div>
+            <div style='font-size:1.2rem;font-weight:bold;color:#28a745;margin-top:10px;'>Ingen aktive farevarsler</div>
+            <div style='opacity:0.6;margin-top:6px;'>for {valgt_region.split()[0]}</div></div>""", unsafe_allow_html=True)
+
+    # Operativ logg
+    if d['logg']:
+        st.write("---"); st.subheader("📝 Operativ Logg")
+        st.text_area("", value=d['logg'], height=120, disabled=True, label_visibility="collapsed")
+
+    # Vaktinstruks i dashboard
+    if vp.get("aktiv") and not vp.get("skjul_forside") and (vp.get("sted") or vp.get("lagleder")):
+        st.write("---"); st.subheader("📋 Instruks for aktivitet/vakt")
+        rig = beregn_rig(vp["tid_fra"])
+        vi1,vi2,vi3 = st.columns(3)
+        with vi1:
+            rh=f"<div class='nf-rig' style='margin-top:8px;'>⏰ Ferdig rigget: <b>{rig}</b></div>" if rig else ""
+            st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
+                        f"<div class='nf-lbl'>📍 Sted</div><div class='nf-val' style='font-size:1.15rem;'>{vp['sted'] or '–'}</div>"
+                        f"<div class='nf-lbl' style='margin-top:10px;'>🕐 Tid</div><div class='nf-val'>{vp['tid_fra'] or '–'} – {vp['tid_til'] or '–'}</div>{rh}</div>", unsafe_allow_html=True)
+        with vi2:
+            mv="".join(f"<div class='nf-div'>• {m.strip()}</div>" for m in vp["mannskaper"].splitlines() if m.strip()) or "<em style='opacity:0.4;'>Ikke oppgitt</em>"
+            st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
+                        f"<div class='nf-lbl'>👷 Lagleder</div><div class='nf-val' style='margin-bottom:10px;'>{vp['lagleder'] or '–'}</div>"
+                        f"<div class='nf-lbl'>👥 Mannskaper</div><div style='font-size:0.9rem;line-height:1.8;'>{mv}</div></div>", unsafe_allow_html=True)
+        with vi3:
+            uv="".join(f"<div class='nf-div'>• {u.strip()}</div>" for u in vp["utstyr"].splitlines() if u.strip()) or "<em style='opacity:0.4;'>Ikke oppgitt</em>"
+            st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
+                        f"<div class='nf-lbl'>🎒 Utstyr</div><div style='font-size:0.9rem;line-height:1.8;'>{uv}</div></div>", unsafe_allow_html=True)
+        vi4,vi5,vi6 = st.columns(3)
+        with vi4: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏥 Legevakt</div><div class='nf-val'>{vp['legevakt'] or '–'}</div></div>", unsafe_allow_html=True)
+        with vi5: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏨 Sykehus</div><div class='nf-val'>{vp['sykehus'] or '–'}</div></div>", unsafe_allow_html=True)
+        with vi6: st.markdown(f"<div class='nf-info'><div class='nf-lbl'>📻 Talegruppe</div><div class='nf-val'>{vp['talegruppe'] or '–'}</div></div>", unsafe_allow_html=True)
+        if vp.get("notat"): st.info(f"📝 {vp['notat']}")
+        st.download_button("📥 Eksporter beredskapsplan", data=generer_beredskapsplan(vp,d).encode("utf-8"),
+                           file_name=f"beredskapsplan_{datetime.now().strftime('%Y%m%d_%H%M')}.html", mime="text/html")
+
+    st.markdown(f"<div style='text-align:right;color:#aaa;'><small>Sist lastet: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</small></div>", unsafe_allow_html=True)
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: REGISTRER DELTAKELSE
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "👤 Registrer deltakelse":
+    st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
+    st.caption("Fyll ut skjemaet etter endt vakt eller aksjon. Navn er obligatorisk.")
+    _deltakelse_skjema()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: REGISTRER AVVIK
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "⚠️ Registrer avvik":
+    st.markdown("<h2>⚠️ Registrer avvik</h2>", unsafe_allow_html=True)
+    st.caption("Avvik sendes automatisk på e-post til ansvarlig og lagres for oppfølging.")
+    _avvik_skjema()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: SKADEREGISTRERING
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "🩹 Skaderegistrering":
+    st.markdown("<h2>🩹 Skaderegistrering</h2>", unsafe_allow_html=True)
+    st.caption("Registrer pasienter behandlet under oppdrag eller sanitetsvakt.")
+    _skade_skjema()
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SIDE: LOGGFØRING
+# ═══════════════════════════════════════════════════════════════════════════════
+elif side == "📝 Loggføring":
+    _logg_skjema()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: VAKTINSTRUKS
