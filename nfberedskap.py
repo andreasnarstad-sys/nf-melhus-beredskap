@@ -139,7 +139,7 @@ def gs_lagre_json(tab, fallback_fil, data):
 
 def gs_last_liste(tab, fallback_fil):
     recs = _gs_fetch(tab)
-    if recs is None: return last_liste(fallback_fil)
+    if not recs: return last_liste(fallback_fil)
     return [_gs_deser(r, tab) for r in recs]
 
 def gs_append(tab, fallback_fil, row_dict, headers):
@@ -847,9 +847,12 @@ elif side == "👤 Registrer deltakelse":
     st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
     st.caption("Fyll ut skjemaet etter endt oppdrag eller vakt.")
 
-    del_melding = st.empty()
+    if st.session_state.get("_del_ok"):
+        st.success(f"✅ Deltakelse registrert for **{st.session_state.pop('_del_ok')}**")
+    if st.session_state.get("_del_feil"):
+        st.error(st.session_state.pop("_del_feil"))
 
-    with st.form("deltakelse_form"):
+    with st.form("deltakelse_form", clear_on_submit=True):
         k1,k2 = st.columns(2)
         with k1:
             navn    = st.text_input("Navn *")
@@ -863,32 +866,40 @@ elif side == "👤 Registrer deltakelse":
         st.markdown("---")
         privatbil = st.checkbox("🚗 Brukte privatbil")
         b1,b2 = st.columns(2)
-        with b1: km_kjort = st.number_input("Kjørte km", min_value=0, step=1, value=0)
-        with b2: regnr    = st.text_input("Reg.nummer", placeholder="AB 12345")
+        with b1: km_kjort = st.number_input("Kjørte km", min_value=0, step=1, value=0, disabled=not st.session_state.get("_del_privatbil", False))
+        with b2: regnr    = st.text_input("Reg.nummer", placeholder="AB 12345", disabled=not st.session_state.get("_del_privatbil", False))
         sendt = st.form_submit_button("💾 Registrer deltakelse", use_container_width=True, type="primary")
+
+    # Sync privatbil checkbox til session_state for disabled-logikk
+    if privatbil != st.session_state.get("_del_privatbil", False):
+        st.session_state["_del_privatbil"] = privatbil
+        st.rerun()
 
     if sendt:
         if not navn.strip():
-            del_melding.error("Navn er påkrevd.")
+            st.session_state["_del_feil"] = "Navn er påkrevd."
         else:
             try:
-                os.makedirs(VEDLEGG_MAPPE, exist_ok=True)
                 vn=[]
                 for f in (opplastet or []):
+                    os.makedirs(VEDLEGG_MAPPE, exist_ok=True)
                     fn=f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{f.name}"
                     with open(os.path.join(VEDLEGG_MAPPE,fn),"wb") as fp: fp.write(f.read())
                     vn.append(fn)
+                _privatbil = st.session_state.get("_del_privatbil", False)
                 gs_append("deltakelse",DELTAKELSE_FIL,
                           {"registrert":datetime.now().strftime('%d.%m.%Y %H:%M'),"navn":navn.strip(),
                            "oppdrag":oppdrag,"tid_ut":tid_ut.strip(),"tid_inn":tid_inn.strip(),
                            "utlegg_kr":utlegg,
-                           "privatbil":"Ja" if privatbil else "Nei",
-                           "km_kjort":km_kjort if privatbil else 0,
-                           "regnr":regnr.strip().upper() if privatbil else "",
+                           "privatbil":"Ja" if _privatbil else "Nei",
+                           "km_kjort":km_kjort if _privatbil else 0,
+                           "regnr":regnr.strip().upper() if _privatbil else "",
                            "vedlegg":vn},DELTAKELSE_HDR)
-                del_melding.success(f"✅ Deltakelse registrert for **{navn.strip()}**")
+                st.session_state["_del_ok"] = navn.strip()
+                st.session_state["_del_privatbil"] = False
             except Exception as e:
-                del_melding.error(f"Feil ved lagring: {e}")
+                st.session_state["_del_feil"] = f"Feil ved lagring: {e}"
+        st.rerun()
 
     st.write("---"); st.subheader("📋 Registreringer i dag")
     today=datetime.now().strftime('%d.%m.%Y')
