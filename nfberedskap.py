@@ -876,13 +876,13 @@ elif side == "👤 Registrer deltakelse":
 
     d_lagsutstyr = st.checkbox("🎒 Lagsutstyr brukt", key="_d_lagutstyr")
 
-    d_mnnskap = st.checkbox("🚒 Mannskapsbil (kr 5,1/km)", key="_d_mnnskap")
+    d_mnnskap = st.checkbox("🚒 Mannskapsbil", key="_d_mnnskap")
     if d_mnnskap:
         d_km_mnnskap = st.number_input("Km – Mannskapsbil", min_value=0, step=1, key="_d_km_mnnskap")
     else:
         d_km_mnnskap = 0
 
-    d_amb = st.checkbox("🚑 Ambulanse (kr 5,6/km)", key="_d_amb")
+    d_amb = st.checkbox("🚑 Ambulanse", key="_d_amb")
     if d_amb:
         d_km_amb = st.number_input("Km – Ambulanse", min_value=0, step=1, key="_d_km_amb")
     else:
