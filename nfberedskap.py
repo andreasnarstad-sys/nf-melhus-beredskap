@@ -2081,6 +2081,9 @@ elif side == "Administrasjon":
                 # Politilogg
                 politilogg_ok = sjekk_api("https://www.politiet.no/politiloggen?distrikt=trondelag")
 
+                # Statens vegvesen NVDB v3
+                vegvesen_ok = sjekk_api("https://nvdbapiles-v3.atlas.vegvesen.no/status")
+
                 # Resend
                 try:
                     api_key = st.secrets["resend"]["api_key"]
@@ -2096,8 +2099,9 @@ elif side == "Administrasjon":
                 st.markdown(lampe(met_ok,  "MET / Yr API"),    unsafe_allow_html=True)
                 st.markdown(lampe(nve_ok,  "NVE Varsom API"),  unsafe_allow_html=True)
             with s3:
-                st.markdown(lampe(tensio_ok,     "Tensio strøm API"),   unsafe_allow_html=True)
+                st.markdown(lampe(tensio_ok,     "Tensio strøm API"),        unsafe_allow_html=True)
                 st.markdown(lampe(politilogg_ok, "Politilogg (politiet.no)"), unsafe_allow_html=True)
+                st.markdown(lampe(vegvesen_ok,   "Vegvesen NVDB API"),        unsafe_allow_html=True)
 
         st.write("")
         adm_tabs = st.tabs(["Beredskapsanalyse","Beredskapsstatus","Vaktinstruks","Avvik","Deltakelser"])
