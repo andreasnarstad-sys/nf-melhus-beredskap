@@ -1424,7 +1424,7 @@ if side == "🏠 Operativ tavle":
               "background:#cc0000;color:white;border:2px solid #990000;box-shadow:0 2px 8px rgba(200,0,0,0.4);font-size:1rem;")
         tg = d.get("talegruppe","") or ""
         tg_html = (f"<br><span style='font-size:1.1rem;'>📻 Talegruppe: <b>{tg}</b></span>" if tg else "")
-        _kort_url = (d.get('kort_url') or "") if _kort_aktiv else ""
+        _kort_url = d.get('kort_url') or ""
         if _kort_url:
             _kort_html = (f"<a href='{_kort_url}' target='_blank' style='display:inline-block;{ks}"
                           f"padding:6px 14px;border-radius:6px;font-weight:bold;text-decoration:none;cursor:pointer;'>"
