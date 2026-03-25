@@ -1957,8 +1957,8 @@ elif side == "⚙️ Administrasjon":
             pw = st.text_input("Passord", type="password", placeholder="Skriv inn passord...", label_visibility="collapsed")
             if st.button("🔓 Logg inn", type="primary", use_container_width=True):
                 _pw_hash = hashlib.sha256(pw.encode()).hexdigest()
-                _stored  = st.secrets.get("ADMIN_PW_HASH","")
-                if _stored and _pw_hash == _stored:
+                _stored  = st.secrets.get("ADMIN_PW_HASH","24e72e5a259388836c3a131330ba12f7e1f282a00354dbb6729acf336ac435b7")
+                if _pw_hash == _stored:
                     st.session_state["admin_ok"]=True; st.rerun()
                 else: st.error("❌ Feil passord")
     else:
