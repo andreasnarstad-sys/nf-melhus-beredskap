@@ -56,7 +56,7 @@ VEDLEGG_MAPPE    = "vedlegg"
 
 # ── GOOGLE SHEETS ─────────────────────────────────────────────────────────────
 
-DELTAKELSE_HDR = ["id","registrert","navn","tid_ut","tid_inn","aksjon",
+DELTAKELSE_HDR = ["id","registrert","navn","tid_ut","tid_inn","aksjon","type",
                   "utlegg_kr","privatbil","km_privatbil","regnr",
                   "mannskapsbil_km","ambulanse_km","vedlegg"]
 AVVIK_HDR      = ["id","registrert","navn","epost","hendelse","konsekvens",
@@ -881,6 +881,7 @@ elif side == "👤 Registrer deltakelse":
     with c1:
         d_navn   = st.text_input("Navn *", key="_d_navn")
         d_aksjon = st.text_input("Aksjonsnavn / sted", key="_d_aksjon")
+        d_type   = st.selectbox("Type", ["Aksjon","Sanitetsvakt","Øvelse","Annet"], key="_d_type")
     with c2:
         t1, t2 = st.columns(2)
         with t1: d_tid_ut  = st.text_input("Tid ut",  placeholder="08:00", key="_d_tid_ut")
@@ -928,6 +929,7 @@ elif side == "👤 Registrer deltakelse":
                 "tid_ut": d_tid_ut.strip(),
                 "tid_inn": d_tid_inn.strip(),
                 "aksjon": d_aksjon.strip(),
+                "type": d_type,
                 "utlegg_kr": d_utlegg,
                 "privatbil": "Ja" if d_privatbil else "Nei",
                 "km_privatbil": d_km_priv,
@@ -1754,7 +1756,7 @@ elif side == "⚙️ Administrasjon":
             if not del_liste:
                 st.info("Ingen deltakelser registrert ennå.")
             else:
-                _dk = {"registrert":"Tidspunkt","navn":"Navn","tid_ut":"Ut","tid_inn":"Inn",
+                _dk = {"registrert":"Tidspunkt","navn":"Navn","type":"Type","tid_ut":"Ut","tid_inn":"Inn",
                        "aksjon":"Aksjon","utlegg_kr":"Utlegg kr","privatbil":"Privatbil",
                        "km_privatbil":"Km priv","regnr":"Reg.nr",
                        "mannskapsbil_km":"Km mnnskap","ambulanse_km":"Km amb"}
