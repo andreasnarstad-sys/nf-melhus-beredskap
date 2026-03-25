@@ -892,10 +892,6 @@ elif side == "👤 Registrer deltakelse":
                            "regnr":regnr.strip().upper() if privatbil else "",
                            "vedlegg":vn},DELTAKELSE_HDR)
                 st.session_state["_del_ok"] = navn.strip()
-                # Nullstill feltene
-                for k in ["_del_navn","_del_tid_ut","_del_tid_inn","_del_privatbil","_del_km","_del_regnr"]:
-                    if k in st.session_state: del st.session_state[k]
-                st.session_state["_del_utlegg"] = 0
             except Exception as e:
                 st.session_state["_del_feil"] = f"Feil ved lagring: {e}"
         st.rerun()
