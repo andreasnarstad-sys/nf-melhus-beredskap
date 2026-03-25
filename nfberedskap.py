@@ -827,15 +827,15 @@ with st.sidebar:
 
     st.markdown("---")
     side = st.radio("Navigasjon", [
-        "🏠 Operativ tavle",
-        "👤 Registrer deltakelse",
-        "⚠️ Registrer avvik",
+        "Operativ tavle",
+        "Registrer deltakelse",
+        "Registrer avvik",
         "🩹 Skaderegistrering",
-        "📝 Loggføring",
-        "✅ Sjekklister",
-        "📋 Vaktinstruks",
-        "💰 Kalkyle – Sanitetsvakt",
-        "⚙️ Administrasjon",
+        "Loggføring",
+        "Sjekklister",
+        "Vaktinstruks",
+        "Kalkyle – Sanitetsvakt",
+        "Administrasjon",
     ], label_visibility="collapsed")
 
     st.markdown("---")
@@ -1249,7 +1249,7 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
         padding:28px;text-align:center;opacity:0.6;margin-bottom:20px;'>
         <div style='font-size:2rem;'>🔒</div>
         <div style='margin-top:8px;font-weight:bold;'>Loggføring krever innlogging</div>
-        <div style='font-size:0.85rem;margin-top:4px;'>Logg inn via ⚙️ Administrasjon på operativ tavle</div>
+        <div style='font-size:0.85rem;margin-top:4px;'>Logg inn via Administrasjon på operativ tavle</div>
         </div>""", unsafe_allow_html=True)
     else:
         with st.form("logg_form", clear_on_submit=True):
@@ -1389,7 +1389,7 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: OPERATIV TAVLE
 # ═══════════════════════════════════════════════════════════════════════════════
-if side == "🏠 Operativ tavle":
+if side == "Operativ tavle":
 
     st.markdown("<h2 style='text-align:center;color:#cc0000;'>🚑 Norsk Folkehjelp Melhus</h2>", unsafe_allow_html=True)
 
@@ -1579,16 +1579,16 @@ if side == "🏠 Operativ tavle":
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: REGISTRER DELTAKELSE
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "👤 Registrer deltakelse":
-    st.markdown("<h2>👤 Registrer deltakelse</h2>", unsafe_allow_html=True)
+elif side == "Registrer deltakelse":
+    st.markdown("<h2>Registrer deltakelse</h2>", unsafe_allow_html=True)
     st.caption("Fyll ut skjemaet etter endt vakt eller aksjon. Navn er obligatorisk.")
     _deltakelse_skjema()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: REGISTRER AVVIK
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "⚠️ Registrer avvik":
-    st.markdown("<h2>⚠️ Registrer avvik</h2>", unsafe_allow_html=True)
+elif side == "Registrer avvik":
+    st.markdown("<h2>Registrer avvik</h2>", unsafe_allow_html=True)
     st.caption("Avvik sendes automatisk på e-post til ansvarlig og lagres for oppfølging.")
     _avvik_skjema()
 
@@ -1603,15 +1603,15 @@ elif side == "🩹 Skaderegistrering":
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: LOGGFØRING
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "📝 Loggføring":
+elif side == "Loggføring":
     _logg_skjema()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: SJEKKLISTER
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "✅ Sjekklister":
-    st.markdown("<h2>✅ Operative Sjekklister</h2>", unsafe_allow_html=True)
-    liste_tabs = st.tabs(["🚑 Ambulanse / 5.6", "🚜 ATV / Scooter", "⛺ KO-henger"])
+elif side == "Sjekklister":
+    st.markdown("<h2>Sjekklister</h2>", unsafe_allow_html=True)
+    liste_tabs = st.tabs(["Ambulanse / 5.6", "ATV / Scooter", "KO-henger"])
 
     # ── Tab 1: Ambulanse 5.6 ─────────────────────────────────────────────────
     with liste_tabs[0]:
@@ -1794,10 +1794,10 @@ elif side == "✅ Sjekklister":
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: VAKTINSTRUKS
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "📋 Vaktinstruks":
-    st.markdown("<h2>📋 Instruks for aktivitet/vakt</h2>", unsafe_allow_html=True)
+elif side == "Vaktinstruks":
+    st.markdown("<h2>Instruks for aktivitet/vakt</h2>", unsafe_allow_html=True)
     if not vp.get("aktiv"):
-        st.info("Ingen aktiv vaktinstruks. Admin fyller ut under ⚙️ Administrasjon på hovedsiden.")
+        st.info("Ingen aktiv vaktinstruks. Admin fyller ut under Administrasjon på hovedsiden.")
     else:
         rig=beregn_rig(vp["tid_fra"])
         if rig: st.markdown(f"<div class='nf-rig'>⏰ Ferdig rigget: <b>{rig}</b> (30 min før oppstart)</div>", unsafe_allow_html=True)
@@ -1831,11 +1831,11 @@ elif side == "📋 Vaktinstruks":
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: KALKYLE
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "💰 Kalkyle – Sanitetsvakt":
-    st.markdown("<h2>💰 Kalkyle – Sanitetsvakt</h2>", unsafe_allow_html=True)
+elif side == "Kalkyle – Sanitetsvakt":
+    st.markdown("<h2>Kalkyle – Sanitetsvakt</h2>", unsafe_allow_html=True)
     if not st.session_state.get("admin_ok"):
         st.warning("🔒 Kalkylen er kun tilgjengelig for innloggede administratorer.")
-        st.caption("Logg inn via **⚙️ Administrasjon** på operativ tavle.")
+        st.caption("Logg inn via **Administrasjon** på operativ tavle.")
         st.stop()
     st.caption("Fyll inn feltene – totalprisen oppdateres automatisk til høyre.")
 
@@ -1952,8 +1952,8 @@ elif side == "💰 Kalkyle – Sanitetsvakt":
 # ═══════════════════════════════════════════════════════════════════════════════
 # SIDE: ADMINISTRASJON
 # ═══════════════════════════════════════════════════════════════════════════════
-elif side == "⚙️ Administrasjon":
-    st.markdown("<h2>⚙️ Administrasjon</h2>", unsafe_allow_html=True)
+elif side == "Administrasjon":
+    st.markdown("<h2>Administrasjon</h2>", unsafe_allow_html=True)
 
     if not st.session_state.get("admin_ok"):
         st.markdown("""<div style='max-width:380px;margin:60px auto;text-align:center;'>
@@ -2034,7 +2034,7 @@ elif side == "⚙️ Administrasjon":
                 st.markdown(lampe(politilogg_ok, "Politilogg (politiet.no)"), unsafe_allow_html=True)
 
         st.write("")
-        adm_tabs = st.tabs(["🤖 Beredskapsanalyse","📡 Beredskapsstatus","📋 Vaktinstruks","⚠️ Avvik","👥 Deltakelser"])
+        adm_tabs = st.tabs(["Beredskapsanalyse","Beredskapsstatus","Vaktinstruks","Avvik","Deltakelser"])
 
         # ── Tab 0: Beredskapsanalyse ─────────────────────────────────────────
         with adm_tabs[0]:
