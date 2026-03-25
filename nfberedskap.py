@@ -1391,11 +1391,11 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
 # ═══════════════════════════════════════════════════════════════════════════════
 if side == "Operativ tavle":
 
-    st.markdown("""
-<div style='text-align:center;padding:18px 0 10px 0;'>
-  <div style='font-size:2.4rem;font-weight:800;color:#2e7d32;letter-spacing:0.5px;line-height:1.1;'>Norsk Folkehjelp Melhus</div>
-</div>
-""", unsafe_allow_html=True)
+    _hdr_c1, _hdr_c2, _hdr_c3 = st.columns([1,2,1])
+    with _hdr_c2:
+        if os.path.exists("nf_logo.png"):
+            st.image("nf_logo.png", width=120)
+        st.markdown("<div style='text-align:center;font-size:1.8rem;font-weight:800;color:#2e7d32;letter-spacing:0.5px;margin-top:4px;'>Norsk Folkehjelp Melhus</div>", unsafe_allow_html=True)
 
     # Status-banner
     st.markdown(f"""<div style="background:{bg};padding:20px;border-radius:15px;
