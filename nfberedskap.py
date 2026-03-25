@@ -2101,9 +2101,15 @@ Nåværende score: **{score} poeng**
             with a4:
                 vev=["🟢 Veinett åpent","🟡 Lokale stengninger","🔴 Kritiske brudd / Isolerte bygder"]
                 nve=st.selectbox("Vei",vev,index=vev.index(d['vei']))
-            if st.button("💾 Lagre beredskapsstatus", type="primary"):
-                gs_lagre_json("beredskap",FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"talegruppe":ntg,"logg":nlog,"ekom":ne,"vei":nve})
-                st.toast("✅ Lagret!",icon="💾"); st.rerun()
+            c_save, c_reset = st.columns([3,1])
+            with c_save:
+                if st.button("💾 Lagre beredskapsstatus", type="primary", use_container_width=True):
+                    gs_lagre_json("beredskap",FIL,{"status":ns,"beskjed":nb,"leder":nl,"vakt":nv,"kort":nk,"talegruppe":ntg,"logg":nlog,"ekom":ne,"vei":nve})
+                    st.toast("✅ Lagret!",icon="💾"); st.rerun()
+            with c_reset:
+                if st.button("🔄 Nullstill til daglig drift", use_container_width=True):
+                    gs_lagre_json("beredskap", FIL, DEFAULTS.copy())
+                    st.toast("✅ Nullstilt til daglig drift!", icon="🔄"); st.rerun()
 
         # ── Tab 2: Vaktinstruks ──────────────────────────────────────────────
         with adm_tabs[2]:
