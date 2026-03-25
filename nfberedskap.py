@@ -762,23 +762,32 @@ CSS = """
 [data-testid="stSidebarNavItems"] {display: none !important;}
 [data-testid="stSidebarNavSeparator"] {display: none !important;}
 
-.nf-card      {background:rgba(128,128,128,0.07);border:1px solid rgba(128,128,128,0.2);border-radius:12px;padding:15px;}
-.nf-card-blue {background:rgba(46,89,132,0.08);border:2px solid #2e5984;border-radius:12px;padding:15px;min-height:160px;}
-.nf-danger    {background:rgba(220,53,69,0.10);border:1px solid #dc3545;border-radius:10px;padding:14px;margin-top:10px;}
-.nf-info      {background:rgba(33,150,243,0.10);border:1px solid #2196f3;border-radius:10px;padding:14px;margin-top:10px;}
-.nf-rig       {background:rgba(255,193,7,0.18);border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:10px;}
-.nf-ok-box    {border:2px solid #28a745;border-radius:12px;padding:60px 20px;text-align:center;height:430px;
+/* Kort – bakgrunn definerer område, ikke ramme */
+.nf-card      {background:rgba(128,128,128,0.07);border-radius:12px;padding:15px;}
+.nf-card-blue {background:rgba(46,89,132,0.08);border-left:3px solid #2e5984;border-radius:0 12px 12px 0;padding:15px;}
+
+/* Varsler – skarpe rammer kun for ting som krever handling */
+.nf-danger    {background:rgba(220,53,69,0.08);border-left:4px solid #dc3545;border-radius:0 8px 8px 0;padding:14px;margin-top:10px;}
+.nf-info      {background:rgba(33,150,243,0.08);border-left:4px solid #2196f3;border-radius:0 8px 8px 0;padding:14px;margin-top:10px;}
+.nf-rig       {background:rgba(255,193,7,0.14);border-left:3px solid #ffc107;border-radius:0 6px 6px 0;padding:10px 14px;margin-bottom:10px;}
+
+/* OK-boks: ingen fast høyde */
+.nf-ok-box    {border-radius:12px;padding:40px 20px;text-align:center;
                display:flex;flex-direction:column;justify-content:center;background:rgba(40,167,69,0.06);}
-.nf-infra     {border-radius:12px;padding:15px;min-height:160px;}
-.nf-infra-ok  {border:2px solid #28a745;background:rgba(40,167,69,0.07);}
-.nf-infra-warn{border:2px solid #ffc107;background:rgba(255,193,7,0.09);}
-.nf-infra-err {border:2px solid #dc3545;background:rgba(220,53,69,0.07);}
-.nf-lbl       {font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;opacity:0.6;margin-bottom:4px;}
+
+/* Infrastruktur-bokser – behov for farge-status beholder ramme */
+.nf-infra     {border-radius:12px;padding:15px;}
+.nf-infra-ok  {border-left:4px solid #28a745;background:rgba(40,167,69,0.07);}
+.nf-infra-warn{border-left:4px solid #ffc107;background:rgba(255,193,7,0.09);}
+.nf-infra-err {border-left:4px solid #dc3545;background:rgba(220,53,69,0.07);}
+
+/* Typografi – minimum kontrast for utendørs bruk */
+.nf-lbl       {font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;color:#555;margin-bottom:4px;}
 .nf-val       {font-size:1.05rem;font-weight:bold;}
 .nf-div       {border-bottom:1px solid rgba(128,128,128,0.2);padding:3px 0;}
-.nf-step      {background:rgba(128,128,128,0.05);border:1px solid rgba(128,128,128,0.15);border-radius:10px;padding:18px 20px;margin-bottom:14px;}
-.nf-step-ttl  {font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;opacity:0.55;margin-bottom:12px;font-weight:bold;}
-.nf-sub       {text-align:right;font-size:0.85rem;opacity:0.7;margin-top:8px;}
+.nf-step      {background:rgba(128,128,128,0.05);border-radius:10px;padding:18px 20px;margin-bottom:14px;}
+.nf-step-ttl  {font-size:0.8rem;text-transform:uppercase;letter-spacing:0.06em;color:#555;margin-bottom:12px;font-weight:bold;}
+.nf-sub       {text-align:right;font-size:0.85rem;color:#555;margin-top:8px;}
 audio         {position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
 </style>
 """
@@ -1031,7 +1040,7 @@ def _logg_skjema():
         fresh = gs_last_liste("logg", LOGG_FIL)
         frigjorte = [e for e in fresh if e.get("gradering") == "frigjort"]
         if not frigjorte:
-            st.markdown("""<div style='text-align:center;padding:60px 20px;opacity:0.5;'>
+            st.markdown("""<div style='text-align:center;padding:60px 20px;opacity:0.72;'>
             <div style='font-size:3rem;'>📭</div>
             <div style='margin-top:12px;font-size:1.1rem;'>Ingen informasjon er frigitt til media ennå</div>
             </div>""", unsafe_allow_html=True)
@@ -1251,7 +1260,7 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
                     height=120, label_visibility="collapsed")
             with lc2:
                 lf_forfatter = st.text_input("Ditt navn", placeholder="Ola Nordmann")
-                st.markdown("<div style='font-size:0.78rem;opacity:0.55;text-transform:uppercase;"
+                st.markdown("<div style='font-size:0.78rem;opacity:0.75;text-transform:uppercase;"
                             "letter-spacing:0.05em;margin:10px 0 6px;'>Gradering</div>",
                             unsafe_allow_html=True)
                 lf_grad = st.radio("Gradering",
@@ -1289,7 +1298,7 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
     fresh_logg = gs_last_liste("logg", LOGG_FIL)
 
     if not fresh_logg:
-        st.markdown("""<div style='text-align:center;padding:50px 20px;opacity:0.4;'>
+        st.markdown("""<div style='text-align:center;padding:50px 20px;opacity:0.72;'>
         <div style='font-size:3rem;'>📋</div>
         <div style='margin-top:10px;'>Loggen er tom</div></div>""", unsafe_allow_html=True)
     else:
@@ -1327,7 +1336,7 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
                 st.markdown(f"""<div style='display:flex;align-items:center;
                 gap:12px;margin:18px 0 10px;'>
                 <div style='flex:1;height:1px;background:rgba(128,128,128,0.2);'></div>
-                <span style='font-size:0.78rem;opacity:0.5;font-weight:bold;
+                <span style='font-size:0.78rem;opacity:0.72;font-weight:bold;
                 letter-spacing:0.06em;'>{dato}</span>
                 <div style='flex:1;height:1px;background:rgba(128,128,128,0.2);'></div>
                 </div>""", unsafe_allow_html=True)
@@ -1336,7 +1345,7 @@ h1{{color:#cc0000;border-bottom:2px solid #cc0000;padding-bottom:10px}}
             if grad == "intern_ikke_off" and not er_admin:
                 st.markdown(f"""<div style='border-left:4px solid #777;
                 background:rgba(128,128,128,0.05);border-radius:8px;
-                padding:9px 16px;margin-bottom:6px;opacity:0.4;'>
+                padding:9px 16px;margin-bottom:6px;opacity:0.72;'>
                 🔒 <em>Intern – ikke offentlig</em>
                 <span style='float:right;font-size:0.75rem;'>{klokkeslett}</span>
                 </div>""", unsafe_allow_html=True)
@@ -1412,11 +1421,11 @@ if side == "🏠 Operativ tavle":
         t,v,prog = hent_lokal_vaer()
         if t is not None:
             ps=' | '.join([f"{i['t']}: {i['temp']}°" for i in prog])
-            st.markdown(f"<div class='nf-card'><b>📍 Melhus Sentrum:</b><br>"
+            st.markdown(f"<div class='nf-card'><b>Melhus Sentrum:</b><br>"
                         f"<h2 style='margin:5px 0;color:#1f77b4;'>{t}°C &nbsp;|&nbsp; {v} m/s</h2>"
                         f"<small style='opacity:0.7;'>{ps}</small></div>", unsafe_allow_html=True)
         else:
-            st.markdown("<div class='nf-card'><b>📍 Melhus Sentrum:</b><br><br><small>⚠️ Værvarselet utilgjengelig.</small></div>", unsafe_allow_html=True)
+            st.markdown("<div class='nf-card'><b>Melhus Sentrum:</b><br><br><small>⚠️ Værvarselet utilgjengelig.</small></div>", unsafe_allow_html=True)
     with c2:
         _kort_aktiv = d['kort'] not in ('Ingen', 'Daglig drift')
         ks = ("background:rgba(128,128,128,0.15);color:inherit;border:1px solid rgba(128,128,128,0.3);font-size:0.85rem;opacity:0.7;"
@@ -1432,7 +1441,7 @@ if side == "🏠 Operativ tavle":
         else:
             _kort_html = (f"<div style='display:inline-block;{ks}padding:4px 12px;border-radius:6px;font-weight:bold;'>"
                           f"📋 {d['kort']}</div>")
-        st.markdown(f"<div class='nf-card-blue'><b>📞 Operativ Ledelse:</b><br>"
+        st.markdown(f"<div class='nf-card-blue'><b>Operativ Ledelse:</b><br>"
                     f"<span style='font-size:1.1rem;'>Leder: <b>{d['leder']}</b></span><br>"
                     f"<span style='font-size:1.1rem;'>Vakt-tlf: <b>{d['vakt']}</b></span>"
                     f"{tg_html}"
@@ -1453,7 +1462,7 @@ if side == "🏠 Operativ tavle":
                 arsak_str = f" ({b['arsak']})" if b.get('arsak') else ""
                 start_str = f" – {b['start']}" if b.get('start') else ""
                 brudd_linjer += f"<br><span style='font-size:0.82rem;opacity:0.85;'>• {b['kommune']}{arsak_str}{start_str}</span>"
-            ekstra = f"<br><span style='font-size:0.8rem;opacity:0.5;'>+{len(pagaende_brudd)-3} til</span>" if len(pagaende_brudd) > 3 else ""
+            ekstra = f"<br><span style='font-size:0.8rem;opacity:0.72;'>+{len(pagaende_brudd)-3} til</span>" if len(pagaende_brudd) > 3 else ""
             strom_html = f"<span style='color:#dc3545;font-weight:bold;'>⚡ {len(pagaende_brudd)} brudd – {tot_berort} kunder berørt</span>{brudd_linjer}{ekstra}"
         elif planlagte_brudd:
             plan_linjer = ""
@@ -1465,11 +1474,11 @@ if side == "🏠 Operativ tavle":
             strom_html = "<span style='color:#28a745;font-size:0.88rem;'>✅ Ingen strømbrudd</span>"
 
         st.markdown(
-            f"<div class='nf-infra {ic}'><b>📡 Kritisk Infrastruktur:</b><br><br>"
+            f"<div class='nf-infra {ic}'><b>Kritisk Infrastruktur:</b><br><br>"
             f"<b>EKOM:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['ekom']}</span><br><br>"
             f"<b>VEI / ISOLASJON:</b><br><span style='opacity:0.9;font-size:0.9rem;'>{d['vei']}</span><br><br>"
             f"<b>STRØM (Tensio):</b><br>{strom_html}"
-            f"<br><span style='font-size:0.72rem;opacity:0.4;'>↻ 2 min</span></div>",
+            f"<br><span style='font-size:0.72rem;opacity:0.72;'>↻ 2 min</span></div>",
             unsafe_allow_html=True)
 
     # Politilogg-boks på operativ tavle
@@ -1491,21 +1500,21 @@ if side == "🏠 Operativ tavle":
                 f"<span style='display:inline-block;background:{farge};color:white;"
                 f"font-size:0.68rem;border-radius:3px;padding:1px 5px;margin-right:4px;'>{kat}</span>"
                 f"<span style='font-size:0.82rem;'><b>{kom}</b> &nbsp;"
-                f"<span style='opacity:0.55;'>{tid_str}</span>"
+                f"<span style='opacity:0.75;'>{tid_str}</span>"
                 f"{(' – ' + tekst_kort) if tekst_kort else ''}</span><br>"
             )
         st.markdown(
             f"<div class='nf-card' style='padding:12px 16px;'>"
-            f"<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b>"
-            f"<span style='float:right;font-size:0.72rem;opacity:0.45;'>↻ 90 sek</span><br><br>"
+            f"<b style='font-size:0.85rem;'>Politilogg – Trøndelag</b>"
+            f"<span style='float:right;font-size:0.72rem;opacity:0.72;'>↻ 90 sek</span><br><br>"
             f"{pl_linjer}"
             f"</div>",
             unsafe_allow_html=True)
     else:
         st.markdown(
             "<div class='nf-card' style='padding:12px 16px;'>"
-            "<b style='font-size:0.85rem;'>👮 Politilogg – Trøndelag</b><br><br>"
-            "<span style='opacity:0.5;font-size:0.85rem;'>Ingen data tilgjengelig – "
+            "<b style='font-size:0.85rem;'>Politilogg – Trøndelag</b><br><br>"
+            "<span style='opacity:0.72;font-size:0.85rem;'>Ingen data tilgjengelig – "
             "<a href='https://www.politiet.no/politiloggen?distrikt=trondelag' target='_blank'>åpne politiet.no</a></span>"
             "</div>",
             unsafe_allow_html=True)
@@ -1545,21 +1554,21 @@ if side == "🏠 Operativ tavle":
         with vi1:
             rh=f"<div class='nf-rig' style='margin-top:8px;'>⏰ Ferdig rigget: <b>{rig}</b></div>" if rig else ""
             st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
-                        f"<div class='nf-lbl'>📍 Sted</div><div class='nf-val' style='font-size:1.15rem;'>{vp['sted'] or '–'}</div>"
+                        f"<div class='nf-lbl'>Sted</div><div class='nf-val' style='font-size:1.15rem;'>{vp['sted'] or '–'}</div>"
                         f"<div class='nf-lbl' style='margin-top:10px;'>🕐 Tid</div><div class='nf-val'>{vp['tid_fra'] or '–'} – {vp['tid_til'] or '–'}</div>{rh}</div>", unsafe_allow_html=True)
         with vi2:
-            mv="".join(f"<div class='nf-div'>• {m.strip()}</div>" for m in vp["mannskaper"].splitlines() if m.strip()) or "<em style='opacity:0.4;'>Ikke oppgitt</em>"
+            mv="".join(f"<div class='nf-div'>• {m.strip()}</div>" for m in vp["mannskaper"].splitlines() if m.strip()) or "<em style='opacity:0.72;'>Ikke oppgitt</em>"
             st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
-                        f"<div class='nf-lbl'>👷 Lagleder</div><div class='nf-val' style='margin-bottom:10px;'>{vp['lagleder'] or '–'}</div>"
-                        f"<div class='nf-lbl'>👥 Mannskaper</div><div style='font-size:0.9rem;line-height:1.8;'>{mv}</div></div>", unsafe_allow_html=True)
+                        f"<div class='nf-lbl'>Lagleder</div><div class='nf-val' style='margin-bottom:10px;'>{vp['lagleder'] or '–'}</div>"
+                        f"<div class='nf-lbl'>Mannskaper</div><div style='font-size:0.9rem;line-height:1.8;'>{mv}</div></div>", unsafe_allow_html=True)
         with vi3:
-            uv="".join(f"<div class='nf-div'>• {u.strip()}</div>" for u in vp["utstyr"].splitlines() if u.strip()) or "<em style='opacity:0.4;'>Ikke oppgitt</em>"
+            uv="".join(f"<div class='nf-div'>• {u.strip()}</div>" for u in vp["utstyr"].splitlines() if u.strip()) or "<em style='opacity:0.72;'>Ikke oppgitt</em>"
             st.markdown(f"<div class='nf-card' style='min-height:unset;'>"
-                        f"<div class='nf-lbl'>🎒 Utstyr</div><div style='font-size:0.9rem;line-height:1.8;'>{uv}</div></div>", unsafe_allow_html=True)
+                        f"<div class='nf-lbl'>Utstyr</div><div style='font-size:0.9rem;line-height:1.8;'>{uv}</div></div>", unsafe_allow_html=True)
         vi4,vi5,vi6 = st.columns(3)
-        with vi4: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏥 Legevakt</div><div class='nf-val'>{vp['legevakt'] or '–'}</div></div>", unsafe_allow_html=True)
-        with vi5: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏨 Sykehus</div><div class='nf-val'>{vp['sykehus'] or '–'}</div></div>", unsafe_allow_html=True)
-        with vi6: st.markdown(f"<div class='nf-info'><div class='nf-lbl'>📻 Talegruppe</div><div class='nf-val'>{vp['talegruppe'] or '–'}</div></div>", unsafe_allow_html=True)
+        with vi4: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>Legevakt</div><div class='nf-val'>{vp['legevakt'] or '–'}</div></div>", unsafe_allow_html=True)
+        with vi5: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>Sykehus</div><div class='nf-val'>{vp['sykehus'] or '–'}</div></div>", unsafe_allow_html=True)
+        with vi6: st.markdown(f"<div class='nf-info'><div class='nf-lbl'>Talegruppe</div><div class='nf-val'>{vp['talegruppe'] or '–'}</div></div>", unsafe_allow_html=True)
         if vp.get("notat"): st.info(f"📝 {vp['notat']}")
         st.download_button("📥 Eksporter beredskapsplan", data=generer_beredskapsplan(vp,d).encode("utf-8"),
                            file_name=f"beredskapsplan_{datetime.now().strftime('%Y%m%d_%H%M')}.html", mime="text/html")
@@ -1795,23 +1804,23 @@ elif side == "📋 Vaktinstruks":
         r1,r2,r3=st.columns(3)
         with r1:
             st.markdown(f"<div class='nf-card'>"
-                        f"<div class='nf-lbl'>📍 Sted</div><div class='nf-val' style='font-size:1.2rem'>{vp['sted'] or '–'}</div>"
+                        f"<div class='nf-lbl'>Sted</div><div class='nf-val' style='font-size:1.2rem'>{vp['sted'] or '–'}</div>"
                         f"<div class='nf-lbl' style='margin-top:12px'>🕐 Tid</div><div class='nf-val'>{vp['tid_fra'] or '–'} – {vp['tid_til'] or '–'}</div>"
                         f"<div class='nf-lbl' style='margin-top:12px'>👷 Lagleder</div><div class='nf-val'>{vp['lagleder'] or '–'}</div>"
                         f"</div>", unsafe_allow_html=True)
         with r2:
             mv="".join(f"<div class='nf-div'>• {m.strip()}</div>" for m in vp["mannskaper"].splitlines() if m.strip()) or "<em style='opacity:0.4'>Ikke oppgitt</em>"
-            st.markdown(f"<div class='nf-card'><div class='nf-lbl'>👥 Mannskaper</div>"
+            st.markdown(f"<div class='nf-card'><div class='nf-lbl'>Mannskaper</div>"
                         f"<div style='line-height:1.9;font-size:0.95rem'>{mv}</div></div>", unsafe_allow_html=True)
         with r3:
             uv="".join(f"<div class='nf-div'>• {u.strip()}</div>" for u in vp["utstyr"].splitlines() if u.strip()) or "<em style='opacity:0.4'>Ikke oppgitt</em>"
-            st.markdown(f"<div class='nf-card'><div class='nf-lbl'>🎒 Utstyr</div>"
+            st.markdown(f"<div class='nf-card'><div class='nf-lbl'>Utstyr</div>"
                         f"<div style='line-height:1.9;font-size:0.95rem'>{uv}</div></div>", unsafe_allow_html=True)
         st.write("")
         n1,n2,n3=st.columns(3)
-        with n1: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏥 Nærmeste legevakt</div><div class='nf-val'>{vp['legevakt'] or '–'}</div></div>", unsafe_allow_html=True)
-        with n2: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>🏨 Nærmeste sykehus</div><div class='nf-val'>{vp['sykehus'] or '–'}</div></div>", unsafe_allow_html=True)
-        with n3: st.markdown(f"<div class='nf-info'><div class='nf-lbl'>📻 Talegruppe i bruk</div><div class='nf-val'>{vp['talegruppe'] or '–'}</div></div>", unsafe_allow_html=True)
+        with n1: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>Nærmeste legevakt</div><div class='nf-val'>{vp['legevakt'] or '–'}</div></div>", unsafe_allow_html=True)
+        with n2: st.markdown(f"<div class='nf-danger'><div class='nf-lbl'>Nærmeste sykehus</div><div class='nf-val'>{vp['sykehus'] or '–'}</div></div>", unsafe_allow_html=True)
+        with n3: st.markdown(f"<div class='nf-info'><div class='nf-lbl'>Talegruppe i bruk</div><div class='nf-val'>{vp['talegruppe'] or '–'}</div></div>", unsafe_allow_html=True)
         if vp.get("notat"): st.write(""); st.info(f"📝 {vp['notat']}")
         st.write("---")
         st.download_button("📥 Eksporter beredskapsplan (HTML)",
