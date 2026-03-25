@@ -2,7 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import requests
 import pandas as pd
-import os, json, io, struct, math, re, uuid, time
+import os, json, io, struct, math, re, uuid, time, hashlib
 from datetime import datetime, timedelta
 
 try:
@@ -1956,7 +1956,10 @@ elif side == "⚙️ Administrasjon":
         with lc:
             pw = st.text_input("Passord", type="password", placeholder="Skriv inn passord...", label_visibility="collapsed")
             if st.button("🔓 Logg inn", type="primary", use_container_width=True):
-                if pw == "melhus123": st.session_state["admin_ok"]=True; st.rerun()
+                _pw_hash = hashlib.sha256(pw.encode()).hexdigest()
+                _stored  = st.secrets.get("ADMIN_PW_HASH","")
+                if _stored and _pw_hash == _stored:
+                    st.session_state["admin_ok"]=True; st.rerun()
                 else: st.error("❌ Feil passord")
     else:
         cl,_ = st.columns([1,5])

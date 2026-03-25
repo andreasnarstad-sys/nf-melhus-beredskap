@@ -1,0 +1,7 @@
+# Ikke push hemmeligheter til GitHub
+.streamlit/secrets.toml
+*.env
+service_account*.json
+gspread_credentials*.json
+__pycache__/
+*.pyc
