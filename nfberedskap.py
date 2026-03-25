@@ -852,30 +852,27 @@ elif side == "👤 Registrer deltakelse":
     if st.session_state.get("_del_feil"):
         st.error(st.session_state.pop("_del_feil"))
 
+    k1,k2 = st.columns(2)
+    with k1:
+        navn    = st.text_input("Navn *", key="_del_navn")
+        oppdrag = st.selectbox("Type oppdrag *", ["SAR","Sanitetsvakt","Annen hendelse","Kurs/øvelse"], key="_del_oppdrag")
+        utlegg  = st.number_input("Private utlegg (kr)", min_value=0, step=50, value=0, key="_del_utlegg")
+    with k2:
+        t1,t2=st.columns(2)
+        with t1: tid_ut  = st.text_input("Tid ut",  placeholder="08:00", key="_del_tid_ut")
+        with t2: tid_inn = st.text_input("Tid inn", placeholder="16:00", key="_del_tid_inn")
+        opplastet = st.file_uploader("Kvittering / vedlegg", type=["jpg","jpeg","png","pdf"],
+                                     accept_multiple_files=True, key="_del_vedlegg")
+    st.markdown("---")
     privatbil = st.checkbox("🚗 Brukte privatbil", key="_del_privatbil")
+    if privatbil:
+        b1,b2 = st.columns(2)
+        with b1: km_kjort = st.number_input("Kjørte km",  min_value=0, step=1, value=0, key="_del_km")
+        with b2: regnr    = st.text_input("Reg.nummer", placeholder="AB 12345", key="_del_regnr")
+    else:
+        km_kjort, regnr = 0, ""
 
-    with st.form("deltakelse_form", clear_on_submit=True):
-        k1,k2 = st.columns(2)
-        with k1:
-            navn    = st.text_input("Navn *")
-            oppdrag = st.selectbox("Type oppdrag *", ["SAR","Sanitetsvakt","Annen hendelse","Kurs/øvelse"])
-            utlegg  = st.number_input("Private utlegg (kr)", min_value=0, step=50, value=0)
-        with k2:
-            t1,t2=st.columns(2)
-            with t1: tid_ut=st.text_input("Tid ut",placeholder="08:00")
-            with t2: tid_inn=st.text_input("Tid inn",placeholder="16:00")
-            opplastet=st.file_uploader("Kvittering / vedlegg",type=["jpg","jpeg","png","pdf"],accept_multiple_files=True)
-        st.markdown("---")
-        if privatbil:
-            b1,b2 = st.columns(2)
-            with b1: km_kjort = st.number_input("Kjørte km", min_value=0, step=1, value=0)
-            with b2: regnr    = st.text_input("Reg.nummer", placeholder="AB 12345")
-        else:
-            km_kjort = 0
-            regnr    = ""
-        sendt = st.form_submit_button("💾 Registrer deltakelse", use_container_width=True, type="primary")
-
-    if sendt:
+    if st.button("💾 Registrer deltakelse", use_container_width=True, type="primary"):
         if not navn.strip():
             st.session_state["_del_feil"] = "Navn er påkrevd."
         else:
@@ -895,6 +892,10 @@ elif side == "👤 Registrer deltakelse":
                            "regnr":regnr.strip().upper() if privatbil else "",
                            "vedlegg":vn},DELTAKELSE_HDR)
                 st.session_state["_del_ok"] = navn.strip()
+                # Nullstill feltene
+                for k in ["_del_navn","_del_tid_ut","_del_tid_inn","_del_privatbil","_del_km","_del_regnr"]:
+                    if k in st.session_state: del st.session_state[k]
+                st.session_state["_del_utlegg"] = 0
             except Exception as e:
                 st.session_state["_del_feil"] = f"Feil ved lagring: {e}"
         st.rerun()
